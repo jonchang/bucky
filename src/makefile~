@@ -1,0 +1,21 @@
+CC = g++
+
+CCFLAGS = -O3
+OBJS = bucky.o
+
+all	: bucky mbsum mb2badger
+
+clean	:
+	rm *.o bucky mbsum mb2badger
+
+bucky   : ${OBJS}
+	${CC} -o $@ ${CCFLAGS} ${OBJS}
+
+bucky.o : bucky.h bucky.C
+	${CC} -c ${CCFLAGS} bucky.C
+
+mbsum	: mbsum.C
+	${CC} -o $@ ${CCFLAGS} mbsum.C
+
+mb2badger : mb2badger.C
+	${CC} -o $@ ${CCFLAGS} mb2badger.C
