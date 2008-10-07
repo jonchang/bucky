@@ -1,4 +1,4 @@
-BUCKy 1.1 README
+BUCKy 1.2 README
 
 INSTALLATION
 Pick a directory where you want the BUCKy code to be.
@@ -7,14 +7,14 @@ To open the compressed tar file with the BUCKy source code and example data,
 do these commands.
 
   cd $BUCKY_HOME
-  tar zxf bucky-1.1.tgz
+  tar zxf bucky-1.2.tgz
 
-This creates a directory named BUCKy-1.1 with subdirectories BUCKy-1.1/data and BUCKy-1.0/src .
+This creates a directory named BUCKy-1.2 with subdirectories BUCKy-1.2/data and BUCKy-1.2/src .
 
 COMPILATION
 If you have gcc installed, compile the software with these commands.
 
-  cd $BUCKY_HOME/BUCKy-1.1/src
+  cd $BUCKY_HOME/BUCKy-1.2/src
   make
 
 This will compile programs mbsum and bucky.
@@ -49,13 +49,13 @@ YEAST EXAMPLE
 To try the yeast example described in the Ane et-al MBE paper (with a much smaller number of updates),
 you can try the following.
 
-  cd $BUCKY_HOME/BUCKy-1.1/data/yeast
+  cd $BUCKY_HOME/BUCKy-1.2/data/yeast
   ../../src/bucky y???/*.in
 
 EXAMINING OUTPUT
 Mac users who want to use standard Mac applications to read the output can open any of the output files
 using TextEdit.
 
-Bret Larget
-30 October, 2006
+Bret Larget and Cecile Ane
+17 January, 2007
 Madison, Wisconsin

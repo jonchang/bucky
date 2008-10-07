@@ -1,5 +1,5 @@
-// BUCKy 1.1 - Bayesian Untangling of Concordance Knots (applied to yeast and other organisms)
-// Copyright (C) 2006 by Bret Larget
+// BUCKy 1.2 - Bayesian Untangling of Concordance Knots (applied to yeast and other organisms)
+// Copyright (C) 2006-2007 by Bret Larget and Cecile Ane
 
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License, version 2, as
@@ -12,12 +12,16 @@
 // distribution or http://www.gnu.org/licenses/gpl.txt) for more
 // details.
 
-// First alpha version March 7, 2005
-// Last modified: October 30, 2006
+// Version History
+
+// First alpha version 7 March, 2005
+// Version 1.1 released 30 October, 2006
+// Version 1.2a 21 August, 2007
+// Version 1.2b 17 January, 2008
 
 // File:     bucky.C
 
-// Input:    [Options] <summary files>
+// Input:    [options] <summary files>
 //
 // Options:  
 //            [-a alpha-value]                --- Dirichlet process hyper-parameter
@@ -30,33 +34,47 @@
 //            [-s1 seed1]                     --- 0 < seed1 < 4294967295
 //            [-s2 seed2]                     --- 0 < seed1 < 4294967295
 //            [--use-independence-prior]
-//            [--use-independence-prior]
 //            [--calculate-pairs]
 //            [--create-sample-file]
+//            [--create-single-file]
+//            [--create-joint-file]
 //            [-h] prints the brief usage message
 //            [--help] prints the brief usage message
+//            [--version] prints brief intro and version number
 //
 // Output:   
 //           
 //  fileRoot.cluster       --- summary of cluster size (number of groups)
 //  fileRoot.concordance   --- split-by-split summary of concordance factor
-//  fileRoot.gene          --- gene by gene summary of gene input information
-//  fileRoot.genepost      --- gene by gene summary of joint posterior information
+//  fileRoot.gene          --- gene by gene summary of joint posterior information
 //  fileRoot.joint         --- table of raw second stage MCMC counts for joint posterior
 //  fileRoot.input         --- names of input files
 //  fileRoot.out           --- output file
 //  fileRoot.pairs         --- output if pairwise analysis is desired (very slow!)
 //  fileRoot.sample        --- output of raw sampled GTMs (very big!)
 //  fileRoot.single        --- summary of table of single gene posterior probabilities
-//  fileRoot.splits        --- numerical code for splits (based on binary representation of half with taxon 1)
-//  fileRoot.top           --- list of sampled trees and corresponding splits
-//  fileRoot.topologies    --- topology by topology summary of average single-gene and joint posterior probabilities
 
-// Changes:
+// Changes in version 1.1
 // --- added probabilities to concordance file output
 // --- fixed bug with split index that assumed no more than 8 taxa
 // --- implemented new and better updateGroups; use it as the default
 // --- added runtime argument ---no-use-update-groups
+
+// Changes in version 1.2
+// --- Added more information to the --help output including default values
+// --- Used Huffman coding idea to create a binary tree for proposing trees that minimizes
+//     the average number of comparisons necessary to map the uniform number to the tree
+//     which should increase the speed of the program, especially for data sets with many poorly resolved trees.
+// --- Added probabilities to the .cluster file.
+// --- Changed function getProb which speeds up retrieving probabilities for genes (by a lot!) by using a lookup table.
+// --- Fixed error in writing clades in primary concordance tree
+// --- Concordance summary includes primary concordance tree
+// --- Eliminated some output files, and do not print some output by default. Add controls to print more output.
+
+// Changes in version 1.2b
+// --- Added the distribution of genome-wide concordance factors for splits in the primary concordance tree
+// --- Fixed error in updatePairCounts, count at the bottom-right
+// --- Fixed uninitialized default values for createXxxFile, fixed error in setFileNames
 
 #include <iostream>
 #include <iomanip>
@@ -70,14 +88,14 @@
 #include "bucky.h"
 
 using namespace std;
-string VERSION = "1.1";
-string DATE = "30 October 2006";
-string COPYRIGHT = "Copyright (C) 2006 by Bret Larget";
+string VERSION = "1.2";
+string DATE = "17 January 2008";
+string COPYRIGHT = "Copyright (C) 2006-2008 by Bret Larget and Cecile Ane";
 
 //
 // readFile
 //
-// input file is expected to have each line cotain two fields separated by white space
+// input file is expected to have each line contain two fields separated by white space
 //   the first field is a topology string (parenthetic representation)
 //   the second field is a positive weight (usually a count from an MCMC sample)
 // add read topologies to row i of the table
@@ -160,7 +178,8 @@ int State::updateOne(int i,Rand& rand) {
   int oldTop = tops[i];
   int newTop;
   if(i < genes.size())
-    newTop = genes[i]->pickTree(rand);
+    //    newTop = genes[i]->pickTree(rand);
+    newTop = genes[i]->pickTreeFast(rand);
   else {
     cerr << "Internal Error: i = " << i << " too large in updateOne." << endl;
     exit(1);
@@ -199,6 +218,10 @@ int State::updateOne(int i,Rand& rand) {
     return 1;
   }
 }
+
+/********************************************************************************
+
+This is the old very slow algorithm.
 
 void State::updateOneGroup(int group,Rand& rand) {
   // group is index in indices of the group to update
@@ -289,14 +312,17 @@ void State::updateOneGroup(int group,Rand& rand) {
   sort(indices.begin(),indices.end());
 }
 
-void State::updateOneGroupNew(int gene,Rand& rand) {
+*******************************************************************************/
+
+// New, faster update group algorithm
+void State::updateOneGroup(int gene,Rand& rand) {
   // pick a random topology for the gene
   // check that it:
   //  (1) is not a topology for another group
-  //  (2) have positive single gene prior for all genes in the group
+  //  (2) has positive single gene prior for all genes in the group
 
   int oldTop = tops[gene];
-  int newTop = genes[gene]->pickTree(rand);
+  int newTop = genes[gene]->pickTreeFast(rand);
   if(newTop==oldTop)
     return;
 
@@ -380,9 +406,9 @@ void State::updateSplits(vector<vector<int> >& totals,vector<vector<int> >& topS
 void State::updatePairCounts(vector<vector<int> >& counts)
 {
   // slow way to do this.  maybe we should have State maintain a vector of groups....
-  // only fill in upper triangle.... (i < j)
-  for(int i=0;i<genes.size()-1;i++)
-    for(int j=0;j<genes.size();j++)
+  // only fill in upper triangle (i <= j)
+  for(int i=0;i<genes.size();i++)
+    for(int j=i;j<genes.size();j++)
       if( tops[i] == tops[j] )
 	counts[i][j]++;
 }
@@ -568,7 +594,7 @@ void Tree::getSplits(SplitSet& s) {
       s.setSplit(i,edges[j++]->getSplit());
   }
 
-// assumes numChains > 1
+// assumes that numChains > 1 and useIndependencePrior == false
 void mcmcmc(vector<State*>& states,vector<int>& index,vector<double>& alphas,Rand& rand,vector<int>& accepts, vector<int>& proposals)
 {
   int numChains = accepts.size();
@@ -592,49 +618,80 @@ void mcmcmc(vector<State*>& states,vector<int>& index,vector<double>& alphas,Ran
   }
 }
 
-void usage()
+void usage(Defaults defaults)
 {
-  cerr << "Usage: bucky \\" << endl;
-  cerr << "[-a alpha-value] \\" << endl;
-  cerr << "[-n number-of-MCMC-updates] \\" << endl;
-  cerr << "[-c number-of-chains] \\" << endl;
-  cerr << "[-r MCMCMC-rate] \\" << endl;
-  cerr << "[-m alpha-multiplier] \\" << endl;
-  cerr << "[-s subsample-rate] \\" << endl;
-  cerr << "[-o output-file-root] \\" << endl;
-  cerr << "[-s1 seed1] \\" << endl;
-  cerr << "[-s2 seed2] \\" << endl;
-  cerr << "[--create-sample-file] \\" << endl;
-  cerr << "[--use-independence-prior] \\" << endl;
-  cerr << "[--calculate-pairs] \\" << endl;
-  cerr << "[--use-update-groups] \\" << endl;
-  cerr << "[--no-use-update-groups] \\" << endl;
-  cerr << "[-h] \\" << endl;
-  cerr << "[--help] \\" << endl;
-  cerr << "<summary files>" << endl;
+  cerr << "Usage: bucky [options] <input files>" << endl << endl;
+  cerr << "  Options:" << endl;
+  cerr << "  Parameter              | Usage                      | Default Value" << endl;
+  cerr << "  -------------------------------------------------------------------" << endl;
+  cerr << "  alpha                  | -a number                  | " << defaults.getAlpha() << endl; 
+  cerr << "  # of MCMC updates      | -n integer                 | " << defaults.getNumUpdates() << endl;
+  cerr << "  # of chains            | -c integer                 | " << defaults.getNumChains() << endl;
+  cerr << "  MCMCMC Rate            | -r integer                 | " << defaults.getMCMCMCRate() << endl;
+  cerr << "  alpha multiplier       | -m number                  | " << defaults.getAlphaMultiplier() << endl;
+  cerr << "  subsample rate         | -s integer                 | " << defaults.getSubsampleRate() << endl;
+  cerr << "  output root file name  | -o name                    | " << defaults.getRootFileName() << endl;
+  cerr << "  random seed 1          | -s1 integer                | " << defaults.getSeed1() << endl;
+  cerr << "  random seed 2          | -s2 integer                | " << defaults.getSeed2() << endl;
+  cerr << "  create sample file     | --create-sample-file       | " << (defaults.getCreateSampleFile() == true ? "true" : "false") << endl;
+  cerr << "  create joint file      | --create-joint-file        | " << (defaults.getCreateJointFile() == true ? "true" : "false") << endl;
+  cerr << "  create single file     | --create-single-file       | " << (defaults.getCreateSingleFile() == true ? "true" : "false") << endl;
+  cerr << "  use independence prior | --use-independence-prior   | " << (defaults.getUseIndependencePrior() == true ? "true" : "false") << endl;
+  cerr << "  calculate pairs        | --calculate-pairs          | " << (defaults.getCalculatePairs() == true ? "true" : "false") << endl;
+  cerr << "  use update groups      | --use-update-groups        | " << (defaults.getUseUpdateGroups() == true ? "true" : "false") << endl;
+  cerr << "  use update groups      | --do-not-use-update-groups |" << endl;
+  cerr << "  help                   | -h OR --help               |" << endl;
+  cerr << "  version                | --version                  |" << endl;
+  cerr << "  -------------------------------------------------------------------" << endl << endl;
   exit(1);
+}
+
+void showParameters(ostream& f,FileNames& fn,Defaults defaults,ModelParameters& mp,RunParameters& rp)
+{
+  f << "  Parameter              | Usage                    | Default Value | Value Used" << endl;
+  f << "  ------------------------------------------------------------------------------" << endl;
+  f << "  alpha                  | -a number                | " << left << setw(14) << defaults.getAlpha()                                             << "| " << mp.getAlpha() << endl;
+  f << "  # of MCMC updates      | -n integer               | " << left << setw(14) << defaults.getNumUpdates()                                        << "| " << rp.getNumUpdates() << endl;
+  f << "  # of chains            | -c integer               | " << left << setw(14) << defaults.getNumChains()                                         << "| " << rp.getNumChains() << endl;
+  f << "  MCMCMC Rate            | -r integer               | " << left << setw(14) << defaults.getMCMCMCRate()                                        << "| " << rp.getMCMCMCRate() << endl;
+  f << "  alpha multiplier       | -m number                | " << left << setw(14) << defaults.getAlphaMultiplier()                                   << "| " << rp.getAlphaMultiplier() << endl;
+  f << "  subsample rate         | -s integer               | " << left << setw(14) << defaults.getSubsampleRate()                                     << "| " << rp.getSubsampleRate() << endl;
+  f << "  output root file name  | -o name                  | " << left << setw(14) << defaults.getRootFileName()                                      << "| " << fn.getRootFileName() << endl;
+  f << "  random seed 1          | -s1 integer              | " << left << setw(14) << defaults.getSeed1()                                             << "| " << rp.getSeed1() << endl;
+  f << "  random seed 2          | -s2 integer              | " << left << setw(14) << defaults.getSeed2()                                             << "| " << rp.getSeed2() << endl;
+  f << "  create sample file     | --create-sample-file     | " << left << setw(14) << (defaults.getCreateSampleFile() == true ? "true" : "false")     << "| " << (rp.getCreateSampleFile() ? "true" : "false") << endl;
+  f << "  create joint file      | --create-joint-file      | " << left << setw(14) << (defaults.getCreateJointFile() == true ? "true" : "false")      << "| " << (rp.getCreateJointFile() ? "true" : "false") << endl;
+  f << "  create single file     | --create-single-file     | " << left << setw(14) << (defaults.getCreateSingleFile() == true ? "true" : "false")     << "| " << (rp.getCreateSingleFile() ? "true" : "false") << endl;
+  f << "  use independence prior | --use-independence-prior | " << left << setw(14) << (defaults.getUseIndependencePrior() == true ? "true" : "false") << "| " << (mp.getUseIndependencePrior() ? "true" : "false") << endl;
+  f << "  calculate pairs        | --calculate-pairs        | " << left << setw(14) << (defaults.getCalculatePairs() == true ? "true" : "false")       << "| " << (rp.getCalculatePairs() ? "true" : "false" ) << endl;
+  f << "  use update groups      | --use-update-groups      | " << left << setw(14) << (defaults.getUseUpdateGroups() == true ? "true" : "false")      << "| " << (rp.getUseUpdateGroups() ? "true" : "false")<< endl;
+  f << "  ------------------------------------------------------------------------------" << endl;
 }
 
 void intro(ostream& f) {
   f << "Bayesian Untangling of Concordance Knots (applied to yeast and other organisms)" << endl;
   f << "BUCKy version " << VERSION << ", " << DATE << endl;
   f << COPYRIGHT << endl << endl;
+  f << "This is free software; see the source for copying conditions.  There is NO" << endl;
+  f << "warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE." << endl << endl;
 }
 
-int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunParameters& rp)
+int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunParameters& rp,Defaults& defaults)
 {
   int k=1;
   bool done = (argc>1 ? false : true);
   while(!done && k<argc) {
     string flag=argv[k];
+    if(flag=="--version")
+      exit(0);
     if(flag=="-h" || flag=="--help")
-      usage();
+      usage(defaults);
     else if(flag=="-a") {
       double alpha;
       string num = argv[++k];
       istringstream f(num);
       if( !(f >> alpha) )
-	usage();
+	usage(defaults);
       if(alpha <= 0.0)
 	cerr << "Warning: parameter alpha must be positive.  Ignoring argument -a " << alpha << "." << endl;
       else
@@ -646,7 +703,7 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
       string num = argv[++k];
       istringstream f(num);
       if( !(f >> numUpdates) )
-	usage();
+	usage(defaults);
       rp.setNumUpdates(numUpdates);
       k++;
     }
@@ -655,9 +712,13 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
       string num = argv[++k];
       istringstream f(num);
       if( !(f >> numChains) )
-	usage();
+	usage(defaults);
       if(numChains==0) {
 	cerr << "Warning: parameter number-of-chains must be at least one. Setting to default -c 1." << endl;
+	numChains=1;
+      }
+      if(mp.getUseIndependencePrior()){
+	cerr << "Warning: parameter number-of-chains can only be used with non-independence prior. Setting to default -c 1." << endl;
 	numChains=1;
       }
       rp.setNumChains(numChains);
@@ -668,7 +729,7 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
       string num = argv[++k];
       istringstream f(num);
       if( !(f >> alphaMultiplier) )
-	usage();
+	usage(defaults);
       if(alphaMultiplier<=0)
 	cerr << "Warning: parameter alpha-multiplier must be positive. Ignoring argument -m " << alphaMultiplier << "." << endl;
       else
@@ -680,7 +741,7 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
       string num = argv[++k];
       istringstream f(num);
       if( !(f >> mcmcmcRate) )
-	usage();
+	usage(defaults);
       if(mcmcmcRate==0) {
 	cerr << "Warning: parameter MCMCMC-rate must be at least one. Setting to default -r 1." << endl;
 	mcmcmcRate=1;
@@ -693,7 +754,7 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
       string num = argv[++k];
       istringstream f(num);
       if( !(f >> subsampleRate) )
-	usage();
+	usage(defaults);
       if(subsampleRate==0) {
 	cerr << "Warning: parameter subsample-rate must be at least one. Setting to default -s 1." << endl;
 	subsampleRate=1;
@@ -711,7 +772,7 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
       string num = argv[++k];
       istringstream f(num);
       if( !(f >> seed1) )
-	usage();
+	usage(defaults);
       if(seed1==0)
 	cerr << "Warning: parameter seed1 must be at least one. Ignorning command -s1 " << seed1 << "." << endl;
       else
@@ -723,7 +784,7 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
       string num = argv[++k];
       istringstream f(num);
       if( !(f >> seed2) )
-	usage();
+	usage(defaults);
       if(seed2==0)
 	cerr << "Warning: parameter seed2 must be at least one. Ignorning command -s2 " << seed2 << "." << endl;
       else
@@ -734,8 +795,23 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
       rp.setCreateSampleFile(true);
       k++;
     }
+    else if(flag=="--create-joint-file") {
+      rp.setCreateJointFile(true);
+      k++;
+    }
+    else if(flag=="--create-single-file") {
+      rp.setCreateSingleFile(true);
+      k++;
+    }
     else if(flag=="--use-independence-prior") {
       mp.setUseIndependencePrior(true);
+      //      mp.setAlpha(1.0/0.0);  // to make sure alpha=Inf and is not used...
+      mp.setAlpha(1.0/0.0);
+      cerr << "Using independence prior: setting alpha=infinity" << endl;
+      if(rp.getNumChains()>1){
+	cerr << "Warning: Independence prior can only be used with 1 chain. Setting number of chains to default -c 1." << endl;
+	rp.setNumChains(1);
+      }
       k++;
     }
     else if(flag=="--calculate-pairs") {
@@ -746,7 +822,7 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
       rp.setUseUpdateGroups(true);
       k++;
     }
-    else if(flag=="--no-use-update-groups") {
+    else if(flag=="--do-not-use-update-groups") {
       rp.setUseUpdateGroups(false);
       k++;
     }
@@ -755,7 +831,7 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
   }
 
   if(argc-k<1)
-    usage();
+    usage(defaults);
   return k;
 }
 
@@ -822,6 +898,8 @@ void Defaults::print(ostream& f) {
   f << "-s1 seed1 = " << seed1 << endl;
   f << "-s2 seed2 = " << seed2 << endl;
   f << "--create-sample-file = " << (createSampleFile ? "true" : "false") << endl;
+  f << "--create-joint-file = " << (createJointFile ? "true" : "false") << endl;
+  f << "--create-single-file = " << (createSingleFile ? "true" : "false") << endl;
   f << "--use-independence-prior = " << (useIndependencePrior ? "true" : "false") << endl;
   f << "--calculate-pairs = " << (calculatePairs ? "true" : "false" ) << endl;
   f << "--use-update-groups = " << (useUpdateGroups ? "true" : "false") << endl;
@@ -839,35 +917,165 @@ void printParameters(ostream& f,FileNames& fn,ModelParameters& mp,RunParameters&
   f << "-s1 seed1 = " << rp.getSeed1() << endl;
   f << "-s2 seed2 = " << rp.getSeed2() << endl;
   f << "--create-sample-file = " << (rp.getCreateSampleFile() ? "true" : "false") << endl;
+  f << "--create-joint-file = " << (rp.getCreateJointFile() ? "true" : "false") << endl;
+  f << "--create-single-file = " << (rp.getCreateSingleFile() ? "true" : "false") << endl;
   f << "--use-independence-prior = " << (mp.getUseIndependencePrior() ? "true" : "false") << endl;
   f << "--calculate-pairs = " << (rp.getCalculatePairs() ? "true" : "false" ) << endl;
   f << "--use-update-groups = " << (rp.getUseUpdateGroups() ? "true" : "false") << endl;
 }
 
+// Fix error in finding concordance tree
+// Two sets are compatible if one is the subset of the other or a subset of the complement of the other or vice versa
+bool isCompatible(unsigned int x,unsigned int y,unsigned int all) {
+  if( x == (x & y) )
+    return true;
+  if( y == (x & y) )
+    return true;
+  unsigned int xc = x^all;
+  if( xc == (xc & y) )
+    return true;
+  if( y == (xc & y) )
+    return true;
+  return false;
+}
+
+
+void GenomewideDistribution::updateSamplewide(vector<int> &splitGeneCount, unsigned int numUpdates) {
+  if (splitGeneCount.size() != samplewide.size()){
+      cerr << "InternalError: wrong number of genes in GenomewideDistribution::updateSamplewide;" << endl;
+      exit(1);
+  }
+  int ngenes=samplewide.size()-1;
+  vector<double> csum(samplewide.size());
+  for(int j=0;j<splitGeneCount.size();j++) {
+    samplewide[j] = (double)(splitGeneCount[j])/numUpdates;
+    if (j>0) csum[j] += csum[j-1]+samplewide[j];
+    else csum[j] = samplewide[j];
+  }
+  int j=0;
+  while(csum[j] < 0.005) j++;
+  samplewideCredibilityInterval[0]= ((double) j)/ngenes;
+  while(csum[j] < 0.025) j++;
+  samplewideCredibilityInterval[1]= ((double) j)/ngenes;
+  while(csum[j] < 0.05) j++;
+  samplewideCredibilityInterval[2]= ((double) j)/ngenes;
+  while(csum[j] < 0.95) j++;
+  samplewideCredibilityInterval[3]= ((double) j)/ngenes;
+  while(csum[j] < 0.975) j++;
+  samplewideCredibilityInterval[4]= ((double) j)/ngenes;
+  while(csum[j] < 0.995 && j<ngenes) j++;
+  samplewideCredibilityInterval[5]= ((double) j)/ngenes;
+}
+
+void GenomewideDistribution::updateConvolutionWeight(double alpha){
+  int ngenes = samplewide.size()-1;
+  int ngrid  = genomewide.size()-1;
+  double priorQ = 1 - priorProbability;
+  vector<vector<double> > logweight;
+  logweight.resize(ngrid+1);
+  for (int i=0; i<ngrid+1; i++) logweight[i].resize(ngenes+1);
+  vector<double> logalphap(ngenes+1);
+  for (int j=0; j<ngenes+1; j++) logalphap[j] = log(alpha*priorProbability + j);
+  vector<double> logalphaq(ngenes+1);
+  for (int j=0; j<ngenes+1; j++) logalphaq[j] = log(alpha*priorQ + j);
+  vector<double> xinside(ngrid-1);
+  vector<double> u(ngrid-1);
+  for (int i=1; i<ngrid; i++){
+    xinside[i-1] = ((double) (i))/ngrid;
+    u[i-1] = log(xinside[i-1])-log(1-xinside[i-1]);
+  }
+  for (int i=1; i<ngrid; i++){
+    logweight[i][1]=alpha*priorProbability*log(xinside[i-1])+(alpha*priorQ+ngenes-2)*log(1-xinside[i-1]);
+    logweight[i][0]   = logweight[i][1] - u[i-1] + logalphap[0] - logalphaq[ngenes-1];
+  }
+  for (int j=2; j<ngenes+1; j++){
+    for (int i=1; i<ngrid; i++)
+      logweight[i][j] = logweight[i][j-1]+u[i-1] - logalphap[j-1]+logalphaq[ngenes-j];
+  }
+  // Next: calculate the normalizing constant Z=Beta(alpha*priorP+1, alpha*priorQ+ngenes-1).
+  // logZ ~ log of sum(exp(logweight[,j]))/ngrid, for any j, avoiding the need for
+  // a library for the Beta or the Gamma function. Checked with R: very accurate
+  // approximation as soon as ngrid > 100 and j well chosen (so that weight[,j] not too skewed).
+  int bestj = (int) (ngenes/2+alpha*(0.5-priorProbability));
+  if (bestj>ngenes-1) bestj=ngenes-1;
+  else if (bestj<1) bestj=1;
+  double logZ = 0; 
+  for (int i=1; i<ngrid; i++) logZ += exp(logweight[i][bestj]);
+  logZ = log( logZ/ngrid );
+  for (int i=1; i<ngrid; i++)
+    for (int j=0; j<ngenes+1; j++)
+      convolutionWeight[i][j] = exp(logweight[i][j] -logZ);
+  for (int j=0; j<ngenes+1; j++){
+    convolutionWeight[0][j] = 0.0;
+    convolutionWeight[ngrid][j] = 0.0;
+  }
+  convolutionWeight[0][0]=(double) ngrid;
+  for (int i=1; i<ngrid+1; i++)
+    convolutionWeight[0][0] -= convolutionWeight[i][0];
+  convolutionWeight[ngrid][ngenes]=(double) ngrid;
+  for (int i=0; i<ngrid; i++)
+    convolutionWeight[ngrid][ngenes] -= convolutionWeight[i][ngenes];
+}
+
+void GenomewideDistribution::updateGenomewide(double alpha) {
+  int ngenes = samplewide.size()-1;
+  int ngrid  = genomewide.size()-1;
+  genomewidePosteriorMean = alpha/(alpha+ngenes)*priorProbability + ngenes/(alpha+ngenes)*samplewidePosteriorMean;
+
+  vector<double> csum(genomewide.size());
+  for(int i=0;i<ngrid+1;i++) { 
+    // matrix multiplication: genomewide = convolutionWeights * samplewide (density)
+    double sumprod=0;
+    for (int j=0; j<ngenes+1; j++)
+      sumprod += convolutionWeight[i][j]*samplewide[j]/ngrid;
+    genomewide[i]=sumprod;
+    if (i>0) csum[i] += csum[i-1]+genomewide[i];
+    else csum[i] = genomewide[i];
+  }
+  int i=0;
+  while(csum[i] < 0.005) i++;
+  genomewideCredibilityInterval[0]= ((double) i)/ngrid;
+  while(csum[i] < 0.025) i++;
+  genomewideCredibilityInterval[1]= ((double) i)/ngrid;
+  while(csum[i] < 0.05) i++;
+  genomewideCredibilityInterval[2]= ((double) i)/ngrid;
+  while(csum[i] < 0.95) i++;
+  genomewideCredibilityInterval[3]= ((double) i)/ngrid;
+  while(csum[i] < 0.975) i++;
+  genomewideCredibilityInterval[4]= ((double) i)/ngrid;
+  while(csum[i] < 0.995 && i<ngrid) i++;
+  genomewideCredibilityInterval[5]= ((double) i)/ngrid;
+}
+
+
+// Currently one function to write all output
+// Should have separate functions for each type of output
 void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int numTaxa,vector<string> topologies,
-		 int numGenes,RunParameters& rp,vector<vector<int> >& newTable,vector<int>& clusterCount,
-		 vector<int>& splits,vector<vector<int> >& splitsGeneMatrix,
+		 int numGenes,RunParameters& rp,ModelParameters& mp,vector<vector<int> >& newTable,
+		 vector<int>& clusterCount,vector<int>& splits,vector<vector<int> >& splitsGeneMatrix,
 		 vector<vector<int> >& pairCounts,vector<Gene*>& genes,vector<double>& alphas,
 		 vector<int>& mcmcmcAccepts,vector<int>& mcmcmcProposals)
 {
-  cout << "Writing joint posterior table to file " << fileNames.getJointFile() << "....";
-  fout << "Writing joint posterior table to file " << fileNames.getJointFile() << "....";
-  ofstream jointStr(fileNames.getJointFile().c_str());
-  jointStr.setf(ios::fixed, ios::floatfield);
-  jointStr.setf(ios::showpoint);
-  for(int i=0;i<numTrees;i++) {
-    jointStr << setw(4) << i << " " << setw(max) << left << topologies[i].substr(0,max) << right;
-    for(int j=0;j<numGenes;j++)
-      jointStr << " " << setw(8) << newTable[i][j];
-    jointStr << endl;
+  // .joint
+  if(rp.getCreateJointFile()) {
+    cout << "Writing joint posterior table to file " << fileNames.getJointFile() << "...." << flush;
+    fout << "Writing joint posterior table to file " << fileNames.getJointFile() << "...." << flush;
+    ofstream jointStr(fileNames.getJointFile().c_str());
+    jointStr.setf(ios::fixed, ios::floatfield);
+    jointStr.setf(ios::showpoint);
+    for(int i=0;i<numTrees;i++) {
+      jointStr << setw(4) << i << " " << setw(max) << left << topologies[i].substr(0,max) << right;
+      for(int j=0;j<numGenes;j++)
+	jointStr << " " << setw(8) << newTable[i][j];
+      jointStr << endl;
+    }
+    cout << "done." << endl;
+    fout << "done." << endl;
   }
-  cout << "done." << endl;
-  fout << "done." << endl;
 
-  cout << "Writing cluster summary to file " << fileNames.getClusterFile() << "....";
-  cout << "done." << endl;
-  fout << "Writing cluster summary to file " << fileNames.getClusterFile() << "....";
-  fout << "done." << endl;
+  // .cluster
+  cout << "Writing cluster summary to file " << fileNames.getClusterFile() << "...." << flush;
+  fout << "Writing cluster summary to file " << fileNames.getClusterFile() << "...." << flush;
   ofstream clusterStr(fileNames.getClusterFile().c_str());
   clusterStr.setf(ios::fixed, ios::floatfield);
   clusterStr.setf(ios::showpoint);
@@ -882,14 +1090,24 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
   int q005 = (int)(rp.getNumUpdates()*0.005),q995 = rp.getNumUpdates() - q005+1;
   int q025 = (int)(rp.getNumUpdates()*0.025),q975 = rp.getNumUpdates() - q025+1;
   int q050 = (int)(rp.getNumUpdates()*0.050),q950 = rp.getNumUpdates() - q050+1;
-  clusterStr << "  k      count" << endl;
+  clusterStr << " # of    raw    posterior" << endl;
+  clusterStr << "groups  counts probability" << endl;
+  clusterStr << "--------------------------" << endl;
   for(int i=a;i<b+1;i++)
-    clusterStr << setw(3) << i << " " << setw(10) << clusterCount[i] << endl;
+    clusterStr << setw(3) << i << " " << setw(10) << clusterCount[i]
+	       << setw(12) << setprecision(8) << clusterCount[i] / (double)rp.getNumUpdates() << endl;
+  clusterStr << "--------------------------" << endl << endl;
+
   int sum;
   double wsum=0;
   for(int j=a;j<b+1;j++)
     wsum += j*clusterCount[j];
-  clusterStr << "mean #groups = " << setprecision(3) << wsum / rp.getNumUpdates() << endl;
+  clusterStr << "mean #groups = " << setprecision(3) << wsum / rp.getNumUpdates() << endl << endl;
+
+  clusterStr << "credible regions for # of groups" << endl << endl;
+  clusterStr << "probability region" << endl;
+  clusterStr << "------------------" << endl;
+
   int lo,hi;
   lo=a;
   sum = clusterCount[a];
@@ -899,7 +1117,7 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
   sum = clusterCount[a];
   while(sum < q995)
     sum += clusterCount[++hi];
-  clusterStr << "99% CI for #groups = (" << lo << "," << hi << ")" << endl;
+  clusterStr << "  0.99      (" << lo << "," << hi << ")" << endl;
   lo=a;
   sum = clusterCount[a];
   while(sum < q025)
@@ -908,7 +1126,7 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
   sum = clusterCount[a];
   while(sum < q975)
     sum += clusterCount[++hi];
-  clusterStr << "95% CI for #groups = (" << lo << "," << hi << ")" << endl;
+  clusterStr << "  0.95      (" << lo << "," << hi << ")" << endl;
   lo=a;
   sum = clusterCount[a];
   while(sum < q050)
@@ -917,11 +1135,15 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
   sum = clusterCount[a];
   while(sum < q950)
     sum += clusterCount[++hi];
-  clusterStr << "90% CI for #groups = (" << lo << "," << hi << ")" << endl;
+  clusterStr << "  0.90      (" << lo << "," << hi << ")" << endl;
+  clusterStr << "------------------" << endl;
   clusterStr.close();
+  cout << "done." << endl;
+  fout << "done." << endl;
 
-  cout << "Writing concordance factors to " << fileNames.getConcordanceFile() << "....";
-  fout << "Writing concordance factors to " << fileNames.getConcordanceFile() << "....";
+  // .concordance
+  cout << "Writing concordance factors to " << fileNames.getConcordanceFile() << "...." << flush;
+  fout << "Writing concordance factors to " << fileNames.getConcordanceFile() << "...." << flush;
   ofstream concordanceStr(fileNames.getConcordanceFile().c_str());
   concordanceStr.setf(ios::fixed, ios::floatfield);
   concordanceStr.setf(ios::showpoint);
@@ -937,30 +1159,79 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
   }
   sort(sw.begin(),sw.end(),cmpTreeWeights);
 
+  unsigned int all=0;
+  for(int i=0;i<numTaxa;i++) {
+    all <<= 1;
+    all += 1;
+  }
+
+  // ctree is the vector of splits in the primary concordance tree
+  // gwDistr is the vector of GenomewideDistribution for splits in the primary concordance tree
+  vector<GenomewideDistribution*> gwDistr;
   vector<Split> ctree;
   for(int w=0;w<splits.size();w++) {
     int i = sw[w].getIndex();
     Split s(splits[i],numTaxa);
-    int y = s.getClade();
+    s.setWeight(sw[w].getWeight()/rp.getNumUpdates());
+    unsigned int y = s.getClade();
     bool add=true;
     for(int j=0;j<ctree.size();j++) {
-      int z = ctree[j].getClade();
-      int yz = y & z;
-      if( yz != z  && yz != y ) {
-	add=false;
+      unsigned int z = ctree[j].getClade();
+      if(!isCompatible(y,z,all)) {
+	add = false;
 	break;
       }
     }
-    if(add)
+    if(add){
+      s.updatePriorProbability();
       ctree.push_back(s);
+      GenomewideDistribution* g;
+      g = new GenomewideDistribution(numGenes, rp.getNumGenomewideGrid());
+      g->updatePriorProbability(s);
+      g->updateSamplewide(splitsGeneMatrix[i], rp.getNumUpdates());
+      if (!mp.getUseIndependencePrior()){ 
+	// under independence: genomewide CF is concentrated on priorProbability.
+	g->updateConvolutionWeight(alphas[0]);
+	g->updateGenomewide(alphas[0]);
+      }
+      gwDistr.push_back(g);
+    }
   }
 
-  concordanceStr << "Concordance Tree Splits:" << endl;
+  // Now, use ctree to actually build the tree
+  // Begin by creating a TaxonSet for each split and then partially ordering them so that subsets precede supersets
+
+  vector<TaxonSet> tset;
+  for(vector<Split>::iterator p=ctree.begin();p!=ctree.end();p++)
+    tset.push_back( *(new TaxonSet(*p)) );
+
+  sort(tset.begin(),tset.end());
+  TaxonSet allTaxa(numTaxa);
+  allTaxa.setAll();
+  tset.push_back( *(new TaxonSet(allTaxa)) );
+
+  ConcordanceTree z(tset,numGenes);
+  concordanceStr << "Primary Concordance Tree Topology:" << endl;
+  z.printTopology(concordanceStr);
+
+  concordanceStr << "Primary Concordance Tree with Sample Concordance Factors:" << endl;
+  z.print(concordanceStr);
+
+  concordanceStr << "Splits in the Primary Concordance Tree: sample-wide ";
+  if (!mp.getUseIndependencePrior())
+    concordanceStr << "and genome-wide ";
+  concordanceStr << "mean CF (95% credibility)" << endl;
   for(int w=0;w<ctree.size();w++) {
-    ctree[w].print(concordanceStr);
+    ctree[w].print(concordanceStr); 
+    //concordanceStr << " " << setprecision(3) << ctree[w].getWeight() << endl;
+    gwDistr[w]->printSampleCF(concordanceStr);
+    if (!mp.getUseIndependencePrior())
+      gwDistr[w]->printGenomeCF(concordanceStr);
     concordanceStr << endl;
   }
   concordanceStr << endl;
+
+  concordanceStr << "All Splits:" << endl;
 
   for(int w=0;w<splits.size();w++) {
     int i = sw[w].getIndex();
@@ -1022,9 +1293,10 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
   cout << "done." << endl;    
   fout << "done." << endl;    
 
+  // .pairs
   if(rp.getCalculatePairs()) {
-    cout << "Writing tree pair data to " << fileNames.getPairTreeFile() << "....";
-    fout << "Writing tree pair data to " << fileNames.getPairTreeFile() << "....";
+    cout << "Writing tree pair data to " << fileNames.getPairTreeFile() << "...." << flush;
+    fout << "Writing tree pair data to " << fileNames.getPairTreeFile() << "...." << flush;
     ofstream pairsStr(fileNames.getPairTreeFile().c_str());
     pairsStr.setf(ios::fixed, ios::floatfield);
     pairsStr.setf(ios::showpoint);
@@ -1040,33 +1312,35 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
     fout << "done." << endl;
   }
 
-  cout << "Writing topology single and joint posterior distribution to " << fileNames.getTreePosteriorFile() << "....";
-  fout << "Writing topology single and joint posterior distribution to " << fileNames.getTreePosteriorFile() << "....";
-  ofstream treePosteriorStr(fileNames.getTreePosteriorFile().c_str());
-  treePosteriorStr.setf(ios::fixed, ios::floatfield);
-  treePosteriorStr.setf(ios::showpoint);
-  treePosteriorStr << "index "
-		   << setw(max) << left << "topology" << right
-		   << setw(10) << "single"
-		   << setw(10) << "joint" << endl;
-  for(int i=0;i<numTrees;i++) {
-    double single=0.0;
-    int joint=0;
-    for(int j=0;j<numGenes;j++) {
-      single += genes[j]->getProb(i);
-      joint += newTable[i][j];
-    }
-    treePosteriorStr << setw(5) << i << " " << setw(max) << left << topologies[i].substr(0,max) << right
-		     << setw(10) << setprecision(6) << (double) single / (double) numGenes
-		     << setw(10) << setprecision(6) << (double) joint / (double) rp.getNumUpdates() / (double) numGenes
-		     << endl;
-  }
-  treePosteriorStr.close();
-  cout << "done." << endl;
-  fout << "done." << endl;
+  // .topologies --- eliminated
+//  cout << "Writing topology single and joint posterior distribution to " << fileNames.getTreePosteriorFile() << "...." << flush;
+//  fout << "Writing topology single and joint posterior distribution to " << fileNames.getTreePosteriorFile() << "...." << flush;
+//  ofstream treePosteriorStr(fileNames.getTreePosteriorFile().c_str());
+//  treePosteriorStr.setf(ios::fixed, ios::floatfield);
+//  treePosteriorStr.setf(ios::showpoint);
+//  treePosteriorStr << "index "
+//		   << setw(max) << left << "topology" << right
+//		   << setw(10) << "single"
+//		   << setw(10) << "joint" << endl;
+//  for(int i=0;i<numTrees;i++) {
+//    double single=0.0;
+//    int joint=0;
+//    for(int j=0;j<numGenes;j++) {
+//      single += genes[j]->getProb(i);
+//      joint += newTable[i][j];
+//    }
+//    treePosteriorStr << setw(5) << i << " " << setw(max) << left << topologies[i].substr(0,max) << right
+//		     << setw(10) << setprecision(6) << (double) single / (double) numGenes
+//		     << setw(10) << setprecision(6) << (double) joint / (double) rp.getNumUpdates() / (double) numGenes
+//		     << endl;
+//  }
+//  treePosteriorStr.close();
+//  cout << "done." << endl;
+//  fout << "done." << endl;
 
-  cout << "Writing single and joint gene posteriors to " << fileNames.getGenePosteriorFile() << "....";
-  fout << "Writing single and joint gene posteriors to " << fileNames.getGenePosteriorFile() << "....";
+// .gene
+  cout << "Writing single and joint gene posteriors to " << fileNames.getGenePosteriorFile() << "...." << flush;
+  fout << "Writing single and joint gene posteriors to " << fileNames.getGenePosteriorFile() << "...." << flush;
   ofstream genePostStr(fileNames.getGenePosteriorFile().c_str());
   for(int i=0;i<numGenes;i++)
     genes[i]->print(genePostStr,newTable,rp.getNumUpdates(),topologies,max);
@@ -1098,6 +1372,7 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
   }
 }
 
+
 int main(int argc, char *argv[])
 {
 
@@ -1114,7 +1389,7 @@ int main(int argc, char *argv[])
   // Read arguments from the command line
   // return value k is the position of the first input file
   //   i.e. argv[k] is the first input file
-  int k=readArguments(argc,argv,fileNames,mp,rp);
+  int k=readArguments(argc,argv,fileNames,mp,rp,defaults);
   int numGenes = argc-k;
 
   // table has one row for each input file and one column for each observed topology
@@ -1125,8 +1400,9 @@ int main(int argc, char *argv[])
   int max=0;
   int numTaxa;
 
-  cout << "Reading in summary files....";
+  cout << "Reading in summary files...." << flush;
   ofstream fout(fileNames.getOutFile().c_str());
+  fout << "Reading in summary files...." << flush;
   readInputFiles(argc,argv,k,table,topologies,inputFiles,max,numTaxa,fout);
   cout << "done." << endl;
 
@@ -1140,12 +1416,12 @@ int main(int argc, char *argv[])
   for(int i=0;i<argc;i++)
     fout << " " << argv[i];
   fout << endl << endl;
-  defaults.print(fout);
+  //  defaults.print(fout);
+  //  fout << endl;
+  //  printParameters(fout,fileNames,mp,rp);
+  //  fout << endl;
+  showParameters(fout,fileNames,defaults,mp,rp);
   fout << endl;
-  printParameters(fout,fileNames,mp,rp);
-  fout << endl << flush;
-  fout << "Reading in summary files....";
-  fout << "done." << endl;
 
   if(numTaxa > 32) {
     cerr << "Error: BUCKy version " << VERSION << " only works with 32 or fewer taxa." << endl;
@@ -1157,16 +1433,19 @@ int main(int argc, char *argv[])
   cout << "Read " << numGenes << " genes with a total of " << numTrees << " different sampled tree topologies" << endl;
   fout << "Read " << numGenes << " genes with a total of " << numTrees << " different sampled tree topologies" << endl;
 
-  cout << "Writing input file names to file " << fileNames.getInputFile() << "....";
-  fout << "Writing input file names to file " << fileNames.getInputFile() << "....";
+  cout << "Writing input file names to file " << fileNames.getInputFile() << "...." << flush;
+  fout << "Writing input file names to file " << fileNames.getInputFile() << "...." << flush;
   ofstream inputStr(fileNames.getInputFile().c_str());
+  inputStr << "Gene Filename" << endl;
+  inputStr << "============================================" << endl;
   for(int i=0;i<inputFiles.size();i++)
     inputStr << setw(4) << i << " " << inputFiles[i] << endl;
+  inputStr << "============================================" << endl;
   cout << "done." << endl;
   fout << "done." << endl;
 
-  cout << "Sorting trees by average posterior probability....";
-  fout << "Sorting trees by average posterior probability....";
+  cout << "Sorting trees by average posterior probability...." << flush;
+  fout << "Sorting trees by average posterior probability...." << flush;
   normalize(table);
   sortTrees(table,topologies);
   cout << "done." << endl;
@@ -1174,34 +1453,37 @@ int main(int argc, char *argv[])
 
   // Print table of individual gene posteriors
 
-  cout << "Writing single gene posterior distribution table to file " << fileNames.getSingleFile() << "....";
-  fout << "Writing single gene posterior distribution table to file " << fileNames.getSingleFile() << "....";
-  ofstream singleStr(fileNames.getSingleFile().c_str());
-  singleStr.setf(ios::fixed, ios::floatfield);
-  singleStr.setf(ios::showpoint);
-
-  for(int i=0;i<numTrees;i++) {
-    singleStr << setw(4) << i << " " << setw(max) << left << topologies[i].substr(0,max) << right;
-    for(int j=0;j<numGenes;j++)
-      singleStr << " " << setw(8) << table[j][i];
-    singleStr << endl;
+  // .single
+  if(rp.getCreateSingleFile()) {
+    cout << "Writing single gene posterior distribution table to file " << fileNames.getSingleFile() << "...." << flush;
+    fout << "Writing single gene posterior distribution table to file " << fileNames.getSingleFile() << "...." << flush;
+    ofstream singleStr(fileNames.getSingleFile().c_str());
+    singleStr.setf(ios::fixed, ios::floatfield);
+    singleStr.setf(ios::showpoint);
+    
+    for(int i=0;i<numTrees;i++) {
+      singleStr << setw(4) << i << " " << setw(max) << left << topologies[i].substr(0,max) << right;
+      for(int j=0;j<numGenes;j++)
+	singleStr << " " << setw(8) << table[j][i];
+      singleStr << endl;
+    }
+    singleStr.close();
+    cout << "done." << endl;
+    fout << "done." << endl;
   }
-  singleStr.close();
-  cout << "done." << endl;
-  fout << "done." << endl;
 
   // Initialize random number generator.
 
-  cout << "Initializing random number generator....";
-  fout << "Initializing random number generator....";
+  cout << "Initializing random number generator...." << flush;
+  fout << "Initializing random number generator...." << flush;
   Rand rand(rp.getSeed1(),rp.getSeed2());
   cout << "done." << endl;
   fout << "done." << endl;
 
   // Create genes
 
-  cout << "Initializing gene information....";
-  fout << "Initializing gene information....";
+  cout << "Initializing gene information...." << flush;
+  fout << "Initializing gene information...." << flush;
   vector<Gene*> genes(numGenes);
   vector<double> counts(numTrees);
   for(int i=0;i<numGenes;i++) {
@@ -1209,33 +1491,41 @@ int main(int argc, char *argv[])
       counts[j] = table[i][j];
     genes[i] = new Gene(i,counts);
   }
-  cout << "done." << endl;
-  fout << "done." << endl;
+  cout << "done." << endl << flush;
+  fout << "done." << endl << flush;
 
-  cout << "Writing summary of gene information to file " << fileNames.getGeneFile() << "....";
-  fout << "Writing summary of gene information to file " << fileNames.getGeneFile() << "....";
-  ofstream geneStr(fileNames.getGeneFile().c_str());
-  for(int i=0;i<numGenes;i++)
-    genes[i]->print(geneStr,inputFiles[i]);
-  geneStr.close();
-  cout << "done." << endl;
-  fout << "done." << endl;
+  // Finished with table, so delete it.
 
-  cout << "Writing topology summary to file " << fileNames.getTopologyFile() << "....";
-  fout << "Writing topology summary to file " << fileNames.getTopologyFile() << "....";
+  for(int i=0;i<table.size();i++)
+    table[i].clear();
+  table.clear();
+
+  // old .gene --- eliminated
+//  cout << "Writing summary of gene information to file " << fileNames.getGeneFile() << "...." << flush;
+//  fout << "Writing summary of gene information to file " << fileNames.getGeneFile() << "...." << flush;
+//  ofstream geneStr(fileNames.getGeneFile().c_str());
+//  for(int i=0;i<numGenes;i++)
+//    genes[i]->print(geneStr,inputFiles[i]);
+//  geneStr.close();
+//  cout << "done." << endl;
+//  fout << "done." << endl;
+
+// .top --- eliminated
+//  cout << "Writing topology summary to file " << fileNames.getTopologyFile() << "...." << flush;
+//  fout << "Writing topology summary to file " << fileNames.getTopologyFile() << "...." << flush;
   vector<vector<int> > topologySplitsMatrix(topologies.size());
   if(numTaxa>3)
     for(int i=0;i<topologies.size();i++)
       topologySplitsMatrix[i].resize(numTaxa-3);
   vector<int> splits; // sorted list of realized splits
-  ofstream topologyStr(fileNames.getTopologyFile().c_str());
+//  ofstream topologyStr(fileNames.getTopologyFile().c_str());
   for(int i=0;i<topologies.size();i++) {
-    topologyStr << setw(4) << i << " " << setw(max) << left << topologies[i].substr(0,max) << right;
+//    topologyStr << setw(4) << i << " " << setw(max) << left << topologies[i].substr(0,max) << right;
     Tree t(numTaxa,topologies[i]);
     SplitSet s;
     t.getSplits(s);
-    s.printShort(topologyStr);
-    topologyStr << endl;
+//    s.printShort(topologyStr);
+//    topologyStr << endl;
 
     for(int j=0;j<numTaxa-3;j++) {
       int x = s.getSplit(j);
@@ -1245,12 +1535,12 @@ int main(int argc, char *argv[])
 	splits.push_back(x);
     }
   }
-  topologyStr.close();
-  cout << "done." << endl;
-  fout << "done." << endl;
+//  topologyStr.close();
+//  cout << "done." << endl;
+//  fout << "done." << endl;
 
-  cout << "Initializing splits counts (found " << splits.size() << " distinct splits)....";
-  fout << "Initializing splits counts (found " << splits.size() << " distinct splits)....";
+  cout << "Initializing splits counts (found " << splits.size() << " distinct splits)...." << flush;
+  fout << "Initializing splits counts (found " << splits.size() << " distinct splits)...." << flush;
   sort(splits.begin(),splits.end());
 
   // topologySplitsIndexMatrix[i][j] = index into splits vector of the jth split of topology i
@@ -1273,24 +1563,25 @@ int main(int argc, char *argv[])
   cout << "done." << endl;
   fout << "done." << endl;
 
-  cout << "Writing splits key to file " << fileNames.getSplitsFile() << "....";
-  fout << "Writing splits key to file " << fileNames.getSplitsFile() << "....";
-  ofstream splitsStr(fileNames.getSplitsFile().c_str());
-  for(int i=0;i<splits.size();i++) {
-    splitsStr << setw(3) << splits[i] << " ";
-    Split s(splits[i],numTaxa);
-    s.print(splitsStr);
-    splitsStr << endl;
-  }
-  splitsStr.close();
-  cout << "done." << endl;
-  fout << "done." << endl;
+  // .split --- eliminated
+//  cout << "Writing splits key to file " << fileNames.getSplitsFile() << "...." << flush;
+//  fout << "Writing splits key to file " << fileNames.getSplitsFile() << "...." << flush;
+//  ofstream splitsStr(fileNames.getSplitsFile().c_str());
+//  for(int i=0;i<splits.size();i++) {
+//    splitsStr << setw(3) << splits[i] << " ";
+//    Split s(splits[i],numTaxa);
+//    s.print(splitsStr);
+//    splitsStr << endl;
+//  }
+//  splitsStr.close();
+//  cout << "done." << endl;
+//  fout << "done." << endl;
 
   if(rp.getNumUpdates()==0)
     return 0;
 
-  cout << "Setting initial MCMC state....";
-  fout << "Setting initial MCMC state....";
+  cout << "Setting initial MCMC state...." << flush;
+  fout << "Setting initial MCMC state...." << flush;
 
   vector<double> alphas(rp.getNumChains());
   alphas[0] = mp.getAlpha();
@@ -1306,8 +1597,8 @@ int main(int argc, char *argv[])
   cout << "done." << endl;
   fout << "done." << endl;
 
-  cout << "Initializing MCMCMC acceptance counters and pairwise counters....";
-  fout << "Initializing MCMCMC acceptance counters and pairwise counters....";
+  cout << "Initializing MCMCMC acceptance counters and pairwise counters...." << flush;
+  fout << "Initializing MCMCMC acceptance counters and pairwise counters...." << flush;
   vector<int> mcmcmcAccepts(rp.getNumChains());
   vector<int> mcmcmcProposals(rp.getNumChains());
   for(int i=0;i<rp.getNumChains();i++)
@@ -1325,40 +1616,39 @@ int main(int argc, char *argv[])
   int numBurn = rp.getNumUpdates()/10;
   cout << "Beginning burn-in with " << numBurn << " updates (10% extra of desired updates)..." << endl;
   cout << "0   10   20   30   40   50   60   70   80   90   100" << endl;
-  cout << "+----+----+----+----+----+----+----+----+----+----+" << endl;
+  cout << "+----+----+----+----+----+----+----+----+----+----+" << endl << flush;
   fout << "Beginning burn-in with " << numBurn << " updates (10% extra of desired updates)..." << endl;
   fout << "0   10   20   30   40   50   60   70   80   90   100" << endl;
-  fout << "+----+----+----+----+----+----+----+----+----+----+" << endl;
+  fout << "+----+----+----+----+----+----+----+----+----+----+" << endl << flush;
   int part = numBurn / 50;
+  int extra = numBurn % 50;
   for(int cycle=0;cycle<numBurn;cycle++) {
-    if( cycle % part == 0) {
+    if( (part > 0)  && (cycle % part == 0) ) {
       cout << "*" << flush;
       fout << "*" << flush;
     }
     for(int i=0;i<rp.getNumChains();i++) {
       states[i]->update(rand);
-      //      if(rp.getUseUpdateGroups()) {
-      //	int group = (int)(rand.runif()*states[i]->getNumGroups());
-      //	states[i]->updateOneGroup(group,rand);
-      //      }
       if(rp.getUseUpdateGroups()) {
 	int gene = (int)(rand.runif()*genes.size());
-	states[i]->updateOneGroupNew(gene,rand);
+	states[i]->updateOneGroup(gene,rand);
       }
-      
     }
 
-    if(cycle % rp.getMCMCMCRate() == 0 && rp.getNumChains()>1) {
+    if(cycle % rp.getMCMCMCRate() == 0 && rp.getNumChains()>1)
       mcmcmc(states,index,alphas,rand,mcmcmcAccepts,mcmcmcProposals);
-    }
+  }
+  for(int i=0;i<extra;i++) {
+    cout << "*";
+    fout << "*";
   }
   cout << "*" << endl;
-  cout << " ....done." << endl;
+  cout << " ....done." << endl << flush;
   fout << "*" << endl;
-  fout << " ....done." << endl;
+  fout << " ....done." << endl << flush;
 
-  cout << "Initializing summary tables...";
-  fout << "Initializing summary tables...";
+  cout << "Initializing summary tables..." << flush;
+  fout << "Initializing summary tables..." << flush;
 
   vector<int> clusterCount(numGenes+1);
   for(int i=0;i<clusterCount.size();i++)
@@ -1371,8 +1661,8 @@ int main(int argc, char *argv[])
       newTable[i][j] = 0;
   }
 
-  cout << "done." << endl;
-  fout << "done." << endl;
+  cout << "done." << endl << flush;
+  fout << "done." << endl << flush;
 
   if(rp.getCreateSampleFile()) {
     cout << "Sampled topologies will be in file " << fileNames.getSampleFile() << "." << endl;
@@ -1381,14 +1671,19 @@ int main(int argc, char *argv[])
 
   cout << "Beginning " << rp.getNumUpdates() << " MCMC updates..." << endl;
   cout << "0   10   20   30   40   50   60   70   80   90   100" << endl;
-  cout << "+----+----+----+----+----+----+----+----+----+----+" << endl;
+  cout << "+----+----+----+----+----+----+----+----+----+----+" << endl << flush;
   fout << "Beginning " << rp.getNumUpdates() << " MCMC updates..." << endl;
   fout << "0   10   20   30   40   50   60   70   80   90   100" << endl;
-  fout << "+----+----+----+----+----+----+----+----+----+----+" << endl;
+  fout << "+----+----+----+----+----+----+----+----+----+----+" << endl << flush;
   part = rp.getNumUpdates() / 50;
-  ofstream sampleFileStr(fileNames.getSampleFile().c_str());
-  sampleFileStr.setf(ios::fixed, ios::floatfield);
-  sampleFileStr.setf(ios::showpoint);
+
+  ofstream sampleFileStr;
+  if(rp.getCreateSampleFile()) {
+    sampleFileStr.open(fileNames.getSampleFile().c_str());
+    sampleFileStr.setf(ios::fixed, ios::floatfield);
+    sampleFileStr.setf(ios::showpoint);
+  }
+
   vector<int> accept(rp.getNumChains());
   for(int i=0;i<rp.getNumChains();i++)
     mcmcmcAccepts[i] = mcmcmcProposals[i] = accept[i] = 0;
@@ -1409,10 +1704,8 @@ int main(int argc, char *argv[])
     states[i0]->updateSplits(splitsGeneMatrix,topologySplitsIndexMatrix);
     clusterCount[states[i0]->getNumGroups()]++;
     if( cycle % part == 0) {
-      cout << "*";
-      cout.flush();
-      fout << "*";
-      fout.flush();
+      cout << "*" << flush;
+      fout << "*" << flush;
     }
     if( rp.getCalculatePairs() && cycle % rp.getSubsampleRate() == 0)
       states[i0]->updatePairCounts(pairCounts);
@@ -1423,11 +1716,15 @@ int main(int argc, char *argv[])
     }
   }
   cout << "*" << endl;
-  cout << " ....done." << endl;
+  cout << " ....done." << endl << flush;
   fout << "*" << endl;
-  fout << " ....done." << endl;
+  fout << " ....done." << endl << flush;
 
-  writeOutput(fout,fileNames,max,numTrees,numTaxa,topologies,numGenes,rp,newTable,clusterCount,splits,splitsGeneMatrix,
+  if(rp.getCreateSampleFile())
+    sampleFileStr.close();
+
+  writeOutput(fout,fileNames,max,numTrees,numTaxa,topologies,numGenes,rp,mp,
+	      newTable,clusterCount,splits,splitsGeneMatrix,
 	      pairCounts,genes,alphas,mcmcmcAccepts,mcmcmcProposals);
 
   for(int i=0;i<numGenes;i++)
@@ -1449,7 +1746,7 @@ int main(int argc, char *argv[])
     fout << hours << (hours==1 ? " hour, " : " hours, ");
   if(days>0 || hours>0 || minutes>0)
     fout << minutes << (minutes==1 ? " minute, " : " minutes, ");
-  fout << seconds << (seconds==1 ? " second." : " seconds.") << endl;
+  fout << seconds << (seconds==1 ? " second." : " seconds.") << endl << flush;
 
   fout.close();
 

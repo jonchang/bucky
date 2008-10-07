@@ -1,4 +1,4 @@
-// BUCKy 1.0 - Bayesian Untangling of Concordance Knots (applied to yeast and other organisms)
+// BUCKy 1.2a - Bayesian Untangling of Concordance Knots (applied to yeast and other organisms)
 // Copyright (C) 2006 by Bret Larget
 
 // This program is free software; you can redistribute it and/or modify
@@ -12,26 +12,31 @@
 // distribution or http://www.gnu.org/licenses/gpl.txt) for more
 // details.
 
-// Last modified: October 12, 2006
+// Last modified: July 25, 2007
 
 // mbsum.C
 
-// Input:    a MrBayes .t file
+// Input:    one or more MrBayes .t files
 //           Lines with the format `tree <name> = <parenthetic tree representation>'
 //             are read as trees.  Other lines are ignored.
 //
-// Options:  [-n number-of-skipped-trees] will skip over the first number-of-skipped-trees trees
+// Options:  [-n number-of-skipped-trees] will skip over the first number-of-skipped-trees trees in each input file
+//           [--skip number-of-skipped-trees] will skip over the first number-of-skipped-trees trees in each input file
+//           [-o outfile] name of file for writing output
 //           [-h] prints the brief usage message
 //           [--help] prints the brief usage message
+//           [--version] prints the version number
 //
-// Output:   a single file with the name <filename - .extension> + .in
+// Output:   a single file with the name <filename - .extension> + .in (by default)
 //             (Output file name is the original file name, stripped of the last extension if there is one, plus .in .)
 //           The output file contains one line per sampled tree topology with two fields,
 //             the topology (parenthetic representation) and the count.
 //           Tree topologies are sorted by count, from highest to lowest.
 //           The output file is in the appropriate input format for BUCKy.
 //
-// Usage:    mbsum [-n number-of-skipped-trees] [-h] [--help] <filename>
+// Usage:    mbsum [--help || -h] [<--skip || -n> number-of-skipped-trees] [<--out || -o> output-file] [--version] [input filename(s)]
+
+#define VERSION "1.02b"
 
 using namespace std;
 
@@ -48,6 +53,10 @@ class Node;
 class Edge {
 public:
   Edge() {}
+  ~Edge() {
+    for(int i=0;i<2;i++)
+      nodes[i] = NULL;
+  }
   Edge(int n,double x) :
     number(n),
     length(x)
@@ -73,6 +82,7 @@ private:
 class Node {
  public:
   Node() {}
+  ~Node() { edges.clear(); }
   Node(int n,bool l) : number(n), leaf(l) {}
   int getNumber() const { return number; }
   void setNumber(int x) { number = x; }
@@ -149,6 +159,10 @@ class Tree {
 public:
   Tree(string,int);
   ~Tree() {
+    for(vector<Edge*>::iterator e=edges.begin();e!=edges.end();e++)
+      delete *e;
+    for(vector<Node*>::iterator n=nodes.begin();n!=nodes.end();n++)
+      delete *n;
     nodes.clear();
     edges.clear();
   }
@@ -234,7 +248,7 @@ void Tree::reorder(Node* root) {
 
 void usageError(char *name)
 {
-  cerr << "Usage: " << name << " [-n number-of-skipped-trees] [-h] [--help] <filename>" << endl;
+  cerr << "Usage: " << name << " mbsum [--help || -h] [<--skip || -n> number-of-skipped-trees] [<--out || -o> output-file] [--version] [input filename(s)]" << endl;
   exit(1);
 }
 
@@ -254,7 +268,7 @@ void Tree::readSubtree(istringstream& s,Node* parent,int& numLeft,int numLine)
   nodes.push_back(n);
   numNodes++;
   Edge* e = new Edge();
-  edges.push_back(new Edge());
+  edges.push_back(e);
   numEdges++;
   e->setNodes(n,parent);
   n->setEdge(e);
@@ -518,94 +532,129 @@ bool cmpTCNodes(TopCountNode* x,TopCountNode* y) {
 
 int main(int argc, char *argv[])
 {
-  int numSkip=0;
-  char *fileName;
-  for(int i=1;i<argc;i++) {
+  if(argc==1)
+    usageError(argv[0]);
+
+  int numSkip = 0;
+  string outFile;
+  vector<string> fileNames;
+
+  for(int i=1;i<argc;) {
     string a = (string)(argv[i]);
     if(a == "-h" || a == "--help")
       usageError(argv[0]);
-  }
-    
-  if(argc == 4) {
-    if((string)argv[1] != "-n")
-      usageError(argv[0]);
-    istringstream f((string)(argv[2]));
-    if(f.fail())
-      usageError(argv[0]);
-    f >> numSkip;
-    if(f.fail())
-      usageError(argv[0]);
-    fileName = argv[3];
-  }
-  else if(argc == 2)
-    fileName = argv[1];
-  else
-    usageError(argv[0]);
-
-  int numTrees=0,numTaxa=0;
-
-  ifstream f(fileName);
-  if(f.fail()) {
-    cerr << "Error: Could not open file " << fileName << " ." << endl;
-    exit(1);
-  }
-
-  string fileRoot = (string)(fileName);
-  int ext = fileRoot.rfind('.');
-
-  if(ext!=string::npos) // '.' in filename, erase from last '.'
-    fileRoot.erase(ext,fileRoot.length() - ext);
-    
-  string outFile = fileRoot + ".in";
-
-  ofstream sumOut(outFile.c_str());
-
-  string line;
-  int lineNumber=0;
-  int numActuallySkipped=0;
-  TopCountNode* root;
-  while(getline(f,line)) {
-    lineNumber++;
-    // skip if line is not in format "  tree name = treeRep"
-    istringstream s(line);
-    string keyTree,name,equalSign;
-    s >> keyTree;
-    if(keyTree != "tree")
-      continue;
-    s >> name >> equalSign;
-    if(equalSign != "=")
-      continue;
-    // The rest should be a parenthetic representation of a tree.  Assume no spaces!
-    // Skip the first numSkip trees
-    if(numSkip-- > 0) {
-      numActuallySkipped++;
-      continue;
+    if(a == "--version") {
+      cout << "mbsum version " << VERSION << endl;
+      exit(1);
     }
-
-    string treeString;
-    s >> treeString;
-    Tree tree(treeString,lineNumber);
-    numTrees++;
-
-    ostringstream g;
-    tree.printTop(g); // changed from mb2badger to not include an endline
-    string top = g.str();
-
-    if(numTrees == 1) // first tree
-      root = new TopCountNode(top);
+    if(a == "-n" || a == "--skip") {
+      if(i == argc-1)
+	usageError(argv[0]);
+      istringstream f((string)(argv[++i]));
+      if(f.fail())
+	usageError(argv[0]);
+      f >> numSkip;
+      if(f.fail())
+	usageError(argv[0]);
+      if(numSkip < 0) {
+	cerr << "Error: Cannot skip a negative number of trees." << endl;
+	usageError(argv[0]);
+      }
+    }
+    else if(a == "-o" || a == "--out") {
+      if(i == argc-1)
+	usageError(argv[0]);
+      istringstream f((string)(argv[++i]));
+      if(f.fail())
+	usageError(argv[0]);
+      outFile.clear();
+      f >> outFile;
+      if(f.fail())
+	usageError(argv[0]);
+    }
     else
-      root->check(top);
+      fileNames.push_back(a);
+    i++;
+  }
+
+  if(outFile.size() == 0) {
+    if(fileNames.size() > 0) {
+      string fileRoot = (string)(fileNames[0]);
+      int ext = fileRoot.rfind('.');
+      if(ext!=string::npos) // '.' in filename, erase from last '.'
+	fileRoot.erase(ext,fileRoot.length() - ext);
+      // erase directory
+      ext = fileRoot.rfind('/');
+      if(ext!=string::npos)
+	fileRoot.erase(0,ext+1);
+      outFile = fileRoot + ".in";
+    }
+    else
+      outFile = "bucky.in";
+  }
+
+  int numFiles = fileNames.size();
+  vector<int> numTrees(numFiles,0);
+  vector<int> numTaxa(numFiles,0);
+  TopCountNode* root;
+  for(int i=0;i<numFiles;i++) {
+    ifstream f(fileNames[i].c_str());
+    if(f.fail())
+      cerr << "Error: Could not open file " << fileNames[i] << " ." << endl;
+    else
+      cout << "Reading file " << fileNames[i] << ": " << flush;
+
+    string line;
+    int lineNumber=0;
+    int numActuallySkipped=0;
+    int skipInFile = numSkip;
+    while(getline(f,line)) {
+      lineNumber++;
+      // skip if line is not in format "  tree name = treeRep"
+      istringstream s(line);
+      string keyTree,name,equalSign;
+      s >> keyTree;
+      if(keyTree != "tree")
+	continue;
+      s >> name >> equalSign;
+      if(equalSign != "=")
+	continue;
+      // The rest should be a parenthetic representation of a tree.  Assume no spaces!
+      // Skip the first numSkip trees
+      if(skipInFile-- > 0) {
+	numActuallySkipped++;
+	continue;
+      }
+
+      string treeString;
+      s >> treeString;
+      Tree tree(treeString,lineNumber);
+      numTrees[i]++;
+
+      ostringstream g;
+      tree.printTop(g); // changed from mb2badger to not include an endline
+      string top = g.str();
+
+      if((i==0) && numTrees[0] == 1) // first tree
+	root = new TopCountNode(top);
+      else
+	root->check(top);
+    }
+    cout << "Skipped " << numActuallySkipped << " trees, read " << numTrees[i] << " trees." << endl;
   }
 
   vector<TopCountNode*> cnodes;
   root->collect(cnodes);
   sort(cnodes.begin(),cnodes.end(),cmpTCNodes);
 
+  ofstream sumOut(outFile.c_str());
   for(vector<TopCountNode*>::iterator n=cnodes.begin();n!=cnodes.end();n++)
     (*n)->print(sumOut);
 
-  cout << "Skipped " << numActuallySkipped << " trees." << endl;
-  cout << "Read " << numTrees << " total trees of which " << cnodes.size() << " are distinct." << endl;
+  int total = 0;
+  for(int i=0;i<numFiles;i++)
+    total += numTrees[i];
+  cout << "Read " << total << " total trees of which " << cnodes.size() << " are distinct." << endl;
   cout << "Output written to file " << outFile << endl;
   return(0);
 }
