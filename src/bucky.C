@@ -835,20 +835,19 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
   return k;
 }
 
-void readInputFiles(int argc,char *argv[],int k,vector<vector<double> >& table,
-		    vector<string>& topologies,vector<string>& inputFiles,int& max,int& numTaxa,ostream& fout)
+void readInputFiles(vector<string>& inputFiles,vector<vector<double> >& table,
+		    vector<string>& topologies,int& max,int& numTaxa,ostream& fout)
 {
-  for(int i=k;i<argc;i++) {
-    inputFiles.push_back((string)(argv[i])); 
-    int numTaxaInFile = readFile((string)(argv[i]),i-k,topologies,table,max);
-    if(i==k)
+  for(size_t i=0;i<inputFiles.size();i++) {
+    int numTaxaInFile = readFile(inputFiles[i],i,topologies,table,max);
+    if(i==0)
       numTaxa = numTaxaInFile;
     else
       if(numTaxaInFile != numTaxa) {
-	cerr << endl << "Error: file " << argv[i] << " contains trees with " << numTaxaInFile << " taxa.";
-	cerr << "Expected " << numTaxa << ", the same as in file " << argv[k] << "." << endl;
-	fout << endl << "Error: file " << argv[i] << " contains trees with " << numTaxaInFile << " taxa.";
-	fout << "Expected " << numTaxa << ", the same as in file " << argv[k] << "." << endl << flush;
+	cerr << endl << "Error: file " << inputFiles[i] << " contains trees with " << numTaxaInFile << " taxa.";
+	cerr << "Expected " << numTaxa << ", the same as in file " << inputFiles[0] << "." << endl;
+	fout << endl << "Error: file " << inputFiles[i] << " contains trees with " << numTaxaInFile << " taxa.";
+	fout << "Expected " << numTaxa << ", the same as in file " << inputFiles[0] << "." << endl << flush;
 	exit(1);
       }
   }
@@ -1396,14 +1395,16 @@ int main(int argc, char *argv[])
   // weights for each are doubles rather than integers to allow for non-sample-based input
   vector<vector<double> > table(numGenes);
   vector<string> topologies;
-  vector<string> inputFiles;
   int max=0;
   int numTaxa;
+
+  // Populate input files vector from command line arguments
+  vector<string> inputFiles(argv + k, argv + argc);
 
   cout << "Reading in summary files...." << flush;
   ofstream fout(fileNames.getOutFile().c_str());
   fout << "Reading in summary files...." << flush;
-  readInputFiles(argc,argv,k,table,topologies,inputFiles,max,numTaxa,fout);
+  readInputFiles(inputFiles,table,topologies,max,numTaxa,fout);
   cout << "done." << endl;
 
   // Open outfile to save all window output
