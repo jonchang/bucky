@@ -1038,6 +1038,8 @@ public:
   //  string getSplitsFile() { return splitsFile; }
   //  string getTopologyFile() { return topologyFile; }
   //  string getTreePosteriorFile() { return treePosteriorFile; }
+  string getInputListFileName() { return inputListFileName; }
+  void setInputListFileName(string filename) { inputListFileName = filename; }
 private:
   string rootFileName;
   string clusterFile;
@@ -1053,6 +1055,7 @@ private:
   //  string splitsFile;
   //  string topologyFile;
   //  string treePosteriorFile;
+  string inputListFileName;
 };
 
 class ModelParameters {
@@ -1130,6 +1133,7 @@ public:
     alphaMultiplier(rp.getAlphaMultiplier()),
     subsampleRate(rp.getSubsampleRate()),
     rootFileName(fn.getRootFileName()),
+    inputListFileName(fn.getInputListFileName()),
     seed1(rp.getSeed1()),
     seed2(rp.getSeed2()),
     useIndependencePrior(mp.getUseIndependencePrior()),
@@ -1148,6 +1152,7 @@ public:
   double getAlphaMultiplier() { return alphaMultiplier; }
   unsigned int getSubsampleRate() { return subsampleRate; }
   string getRootFileName() { return rootFileName; }
+  string getInputListFileName() { return inputListFileName; }
   unsigned int getSeed1() { return seed1; }
   unsigned int getSeed2() { return seed2; }
   unsigned int getNumGenomewideGrid() { return numGenomewideGrid; }
@@ -1165,6 +1170,7 @@ private:
   double alphaMultiplier;
   unsigned int subsampleRate;
   string rootFileName;
+  string inputListFileName;
   unsigned int seed1;
   unsigned int seed2;
   unsigned int numGenomewideGrid;

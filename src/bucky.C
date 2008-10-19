@@ -631,6 +631,7 @@ void usage(Defaults defaults)
   cerr << "  alpha multiplier       | -m number                  | " << defaults.getAlphaMultiplier() << endl;
   cerr << "  subsample rate         | -s integer                 | " << defaults.getSubsampleRate() << endl;
   cerr << "  output root file name  | -o name                    | " << defaults.getRootFileName() << endl;
+  cerr << "  input file list file   | -i filename                | " << defaults.getInputListFileName() << endl;
   cerr << "  random seed 1          | -s1 integer                | " << defaults.getSeed1() << endl;
   cerr << "  random seed 2          | -s2 integer                | " << defaults.getSeed2() << endl;
   cerr << "  create sample file     | --create-sample-file       | " << (defaults.getCreateSampleFile() == true ? "true" : "false") << endl;
@@ -657,6 +658,7 @@ void showParameters(ostream& f,FileNames& fn,Defaults defaults,ModelParameters& 
   f << "  alpha multiplier       | -m number                | " << left << setw(14) << defaults.getAlphaMultiplier()                                   << "| " << rp.getAlphaMultiplier() << endl;
   f << "  subsample rate         | -s integer               | " << left << setw(14) << defaults.getSubsampleRate()                                     << "| " << rp.getSubsampleRate() << endl;
   f << "  output root file name  | -o name                  | " << left << setw(14) << defaults.getRootFileName()                                      << "| " << fn.getRootFileName() << endl;
+  f << "  input file list file   | -i filename              | " << left << setw(14) << defaults.getInputListFileName()                                      << "| " << fn.getInputListFileName() << endl;
   f << "  random seed 1          | -s1 integer              | " << left << setw(14) << defaults.getSeed1()                                             << "| " << rp.getSeed1() << endl;
   f << "  random seed 2          | -s2 integer              | " << left << setw(14) << defaults.getSeed2()                                             << "| " << rp.getSeed2() << endl;
   f << "  create sample file     | --create-sample-file     | " << left << setw(14) << (defaults.getCreateSampleFile() == true ? "true" : "false")     << "| " << (rp.getCreateSampleFile() ? "true" : "false") << endl;
@@ -767,6 +769,11 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
       fn.setFileNames(root);
       k++;
     }
+    else if(flag=="-i") {
+      string filename = argv[++k];
+      fn.setInputListFileName(filename);
+      k++;
+    }
     else if(flag=="-s1") {
       unsigned int seed1;
       string num = argv[++k];
@@ -830,9 +837,17 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
       done = true;
   }
 
-  if(argc-k<1)
+  if(fn.getInputListFileName().empty() && argc-k<1)
     usage(defaults);
   return k;
+}
+
+void readInputFileList(string inputListFileName, vector<string>& inputFiles) {
+  ifstream f(inputListFileName.c_str());
+  string filename;
+  while (getline(f, filename)) {
+    inputFiles.push_back(filename);
+  }
 }
 
 void readInputFiles(vector<string>& inputFiles,vector<vector<double> >& table,
@@ -1389,7 +1404,16 @@ int main(int argc, char *argv[])
   // return value k is the position of the first input file
   //   i.e. argv[k] is the first input file
   int k=readArguments(argc,argv,fileNames,mp,rp,defaults);
-  int numGenes = argc-k;
+
+  // Populate input files vector from remaining command line arguments
+  vector<string> inputFiles(argv + k, argv + argc);
+
+  // If input list filename is given as argument, read input filenames
+  if (not fileNames.getInputListFileName().empty()) {
+    readInputFileList(fileNames.getInputListFileName(), inputFiles);
+  }
+
+  int numGenes = inputFiles.size();
 
   // table has one row for each input file and one column for each observed topology
   // weights for each are doubles rather than integers to allow for non-sample-based input
@@ -1397,9 +1421,6 @@ int main(int argc, char *argv[])
   vector<string> topologies;
   int max=0;
   int numTaxa;
-
-  // Populate input files vector from command line arguments
-  vector<string> inputFiles(argv + k, argv + argc);
 
   cout << "Reading in summary files...." << flush;
   ofstream fout(fileNames.getOutFile().c_str());
