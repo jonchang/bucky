@@ -842,11 +842,21 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
   return k;
 }
 
+static const string WHITESPACE_CHARS(" \t\n\r\f\v");
+
+// Returns the string defined by S, with all characters in CHARS
+// stripped from its righthand side
+string stripRight(const string& s,
+                  const string& chars = WHITESPACE_CHARS) {
+  string::size_type pos = s.find_last_not_of(chars);
+  return (pos == string::npos ? "" : s.substr(0, pos + 1));
+}
+
 void readInputFileList(string inputListFileName, vector<string>& inputFiles) {
   ifstream f(inputListFileName.c_str());
   string filename;
   while (getline(f, filename)) {
-    inputFiles.push_back(filename);
+    inputFiles.push_back(stripRight(filename));
   }
 }
 
