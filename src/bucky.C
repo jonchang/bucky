@@ -812,8 +812,8 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
     }
     else if(flag=="--use-independence-prior") {
       mp.setUseIndependencePrior(true);
-      //      mp.setAlpha(1.0/0.0);  // to make sure alpha=Inf and is not used...
-      mp.setAlpha(1.0/0.0);
+      double myzero = 0.0;
+      mp.setAlpha(1.0/myzero);
       cerr << "Using independence prior: setting alpha=infinity" << endl;
       if(rp.getNumChains()>1){
 	cerr << "Warning: Independence prior can only be used with 1 chain. Setting number of chains to default -c 1." << endl;
@@ -1125,8 +1125,8 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
   int sum;
   double wsum=0;
   for(int j=a;j<b+1;j++)
-    wsum += j*clusterCount[j];
-  clusterStr << "mean #groups = " << setprecision(3) << wsum / rp.getNumUpdates() << endl << endl;
+     wsum += j* (clusterCount[j]/ (double)rp.getNumUpdates()); 
+  clusterStr << "mean #groups = " << setprecision(3) << wsum << endl << endl;
 
   clusterStr << "credible regions for # of groups" << endl << endl;
   clusterStr << "probability region" << endl;
@@ -1178,7 +1178,7 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
     sw[i].setWeight(0);
     for(int j=0;j<numGenes+1;j++)
       if(splitsGeneMatrix[i][j]>0)
-	sw[i].addWeight(j*splitsGeneMatrix[i][j]);
+	sw[i].addWeight(j* (double)splitsGeneMatrix[i][j]);
     sw[i].setIndex(i);
   }
   sort(sw.begin(),sw.end(),cmpTreeWeights);
@@ -1282,8 +1282,8 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
     concordanceStr << endl;
     wsum=0;
     for(int j=a;j<b+1;j++)
-      wsum += j*splitsGeneMatrix[i][j];
-    concordanceStr << "mean CF = " << setprecision(3) << wsum / rp.getNumUpdates() << endl;
+      wsum += j* ( splitsGeneMatrix[i][j] / (double)rp.getNumUpdates());
+    concordanceStr << "mean CF = " << setprecision(3) << wsum << endl;
     int lo,hi;
     lo=a;
     sum = splitsGeneMatrix[i][a];
