@@ -37,7 +37,7 @@ double logUB(unsigned int n){
   if (n<4) return 0.0;
   double answer = 0.0;
   for (unsigned int i=4;i<n+1;i++)
-    answer += log((double)(2*i - 5));
+    answer += log(static_cast<double>(2*i - 5));
   return answer;
 }
 

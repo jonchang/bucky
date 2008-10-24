@@ -84,6 +84,7 @@
 #include <vector>
 #include <cmath>
 #include <ctime>
+#include <limits>
 
 #include "bucky.h"
 
@@ -812,9 +813,9 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
     }
     else if(flag=="--use-independence-prior") {
       mp.setUseIndependencePrior(true);
-      double myzero = 0.0;
-      mp.setAlpha(1.0/myzero);
-      cerr << "Using independence prior: setting alpha=infinity" << endl;
+      // to make sure alpha=Inf and is not used...
+      mp.setAlpha(numeric_limits<double>::infinity());
+      cerr << "Using independence prior: setting alpha=" << mp.getAlpha() << endl;
       if(rp.getNumChains()>1){
 	cerr << "Warning: Independence prior can only be used with 1 chain. Setting number of chains to default -c 1." << endl;
 	rp.setNumChains(1);
