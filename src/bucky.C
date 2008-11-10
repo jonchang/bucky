@@ -626,6 +626,7 @@ void usage(Defaults defaults)
   cerr << "  Parameter              | Usage                      | Default Value" << endl;
   cerr << "  -------------------------------------------------------------------" << endl;
   cerr << "  alpha                  | -a number                  | " << defaults.getAlpha() << endl; 
+  cerr << "  # of runs (ignored...) | -k integer                 | " << defaults.getNumRuns() << endl;
   cerr << "  # of MCMC updates      | -n integer                 | " << defaults.getNumUpdates() << endl;
   cerr << "  # of chains            | -c integer                 | " << defaults.getNumChains() << endl;
   cerr << "  MCMCMC Rate            | -r integer                 | " << defaults.getMCMCMCRate() << endl;
@@ -653,6 +654,7 @@ void showParameters(ostream& f,FileNames& fn,Defaults defaults,ModelParameters& 
   f << "  Parameter              | Usage                    | Default Value | Value Used" << endl;
   f << "  ------------------------------------------------------------------------------" << endl;
   f << "  alpha                  | -a number                | " << left << setw(14) << defaults.getAlpha()                                             << "| " << mp.getAlpha() << endl;
+  f << "  # of runs              | -k integer               | " << left << setw(14) << defaults.getNumRuns()                                           << "| " << rp.getNumRuns() << endl;
   f << "  # of MCMC updates      | -n integer               | " << left << setw(14) << defaults.getNumUpdates()                                        << "| " << rp.getNumUpdates() << endl;
   f << "  # of chains            | -c integer               | " << left << setw(14) << defaults.getNumChains()                                         << "| " << rp.getNumChains() << endl;
   f << "  MCMCMC Rate            | -r integer               | " << left << setw(14) << defaults.getMCMCMCRate()                                        << "| " << rp.getMCMCMCRate() << endl;
@@ -708,6 +710,15 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
       if( !(f >> numUpdates) )
 	usage(defaults);
       rp.setNumUpdates(numUpdates);
+      k++;
+    }
+    else if(flag=="-k") {
+      unsigned int numRuns;
+      string num = argv[++k];
+      istringstream f(num);
+      if( !(f >> numRuns) )
+	usage(defaults);
+      rp.setNumRuns(numRuns);
       k++;
     }
     else if(flag=="-c") {
@@ -914,6 +925,7 @@ void sortTrees(vector<vector<double> >& table,vector<string>& topologies)
 void Defaults::print(ostream& f) {
   f << "BUCKy default values:" << endl;
   f << "-a alpha-value = " << alpha << endl;
+  f << "-k number-of-chains = " << numRuns << endl;
   f << "-n number-of-MCMC-updates = " << numUpdates << endl;
   f << "-c number-of-chains = " << numChains << endl;
   f << "-r MCMCMC-rate = " << mcmcmcRate << endl;
@@ -931,8 +943,10 @@ void Defaults::print(ostream& f) {
 }
 
 void printParameters(ostream& f,FileNames& fn,ModelParameters& mp,RunParameters& rp) {
+//this function seems to be obsolete and not used.
   f << "Parameters used:" << endl;
   f << "-a alpha-value =" << mp.getAlpha() << endl;
+  f << "-k number-of-chains = " << rp.getNumRuns() << endl;
   f << "-n number-of-MCMC-updates = " << rp.getNumUpdates() << endl;
   f << "-c number-of-chains = " << rp.getNumChains() << endl;
   f << "-r MCMCMC-rate = " << rp.getMCMCMCRate() << endl;
@@ -963,18 +977,23 @@ bool isCompatible(unsigned int x,unsigned int y,unsigned int all) {
     return true;
   return false;
 }
-
-
 void GenomewideDistribution::updateSamplewide(vector<int> &splitGeneCount, unsigned int numUpdates) {
-  if (splitGeneCount.size() != samplewide.size()){
+  vector<double> splitGenePP(splitGeneCount.size());
+  for (int j=0;j<splitGeneCount.size();j++)
+    splitGenePP[j] = (double)(splitGeneCount[j])/numUpdates;
+  this->updateSamplewide(splitGenePP);
+}
+
+void GenomewideDistribution::updateSamplewide(vector<double> &splitGenePP){
+  if (splitGenePP.size() != samplewide.size()){
       cerr << "InternalError: wrong number of genes in GenomewideDistribution::updateSamplewide;" << endl;
       exit(1);
   }
   int ngenes=samplewide.size()-1;
   vector<double> csum(samplewide.size());
-  for(int j=0;j<splitGeneCount.size();j++) {
-    samplewide[j] = (double)(splitGeneCount[j])/numUpdates;
-    if (j>0) csum[j] += csum[j-1]+samplewide[j];
+  for(int j=0;j<splitGenePP.size();j++) {
+    samplewide[j] = splitGenePP[j];
+    if (j>0) csum[j] =  csum[j-1]+samplewide[j];
     else csum[j] = samplewide[j];
   }
   int j=0;
@@ -1077,9 +1096,9 @@ void GenomewideDistribution::updateGenomewide(double alpha) {
 // Should have separate functions for each type of output
 void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int numTaxa,vector<string> topologies,
 		 int numGenes,RunParameters& rp,ModelParameters& mp,vector<vector<int> >& newTable,
-		 vector<int>& clusterCount,vector<int>& splits,vector<vector<int> >& splitsGeneMatrix,
-		 vector<vector<int> >& pairCounts,vector<Gene*>& genes,vector<double>& alphas,
-		 vector<int>& mcmcmcAccepts,vector<int>& mcmcmcProposals)
+		 vector<vector<int> >& clusterCount, vector<int>& splits,  vector<vector<vector<int> > >& splitsGeneMatrix,
+		 vector<vector<int> >& pairCounts,   vector<Gene*>& genes, vector<double>& alphas,
+		 vector<vector<int> >& mcmcmcAccepts,vector<vector<int> >& mcmcmcProposals)
 {
   // .joint
   if(rp.getCreateJointFile()) {
@@ -1091,7 +1110,7 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
     for(int i=0;i<numTrees;i++) {
       jointStr << setw(4) << i << " " << setw(max) << left << topologies[i].substr(0,max) << right;
       for(int j=0;j<numGenes;j++)
-	jointStr << " " << setw(8) << newTable[i][j];
+	jointStr << " " << setw(8) << setprecision(5) << newTable[i][j] / ((double)rp.getNumRuns()*rp.getNumUpdates());
       jointStr << endl;
     }
     cout << "done." << endl;
@@ -1104,67 +1123,80 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
   ofstream clusterStr(fileNames.getClusterFile().c_str());
   clusterStr.setf(ios::fixed, ios::floatfield);
   clusterStr.setf(ios::showpoint);
-  int a=numGenes,b=0;
-  for(int i=0;i<numGenes+1;i++)
-    if(clusterCount[i]>0) {
-      if(a>i)
-	a = i;
-      if(b<i)
-	b = i;
-    }
-  int q005 = (int)(rp.getNumUpdates()*0.005),q995 = rp.getNumUpdates() - q005+1;
-  int q025 = (int)(rp.getNumUpdates()*0.025),q975 = rp.getNumUpdates() - q025+1;
-  int q050 = (int)(rp.getNumUpdates()*0.050),q950 = rp.getNumUpdates() - q050+1;
-  clusterStr << " # of    raw    posterior" << endl;
-  clusterStr << "groups  counts probability" << endl;
-  clusterStr << "--------------------------" << endl;
-  for(int i=a;i<b+1;i++)
-    clusterStr << setw(3) << i << " " << setw(10) << clusterCount[i]
-	       << setw(12) << setprecision(8) << clusterCount[i] / (double)rp.getNumUpdates() << endl;
-  clusterStr << "--------------------------" << endl << endl;
 
-  int sum;
-  double wsum=0;
-  for(int j=a;j<b+1;j++)
-     wsum += j* (clusterCount[j]/ (double)rp.getNumUpdates()); 
-  clusterStr << "mean #groups = " << setprecision(3) << wsum << endl << endl;
+  vector<double> clusterPP(numGenes+1);
+  vector<double> wsum(rp.getNumRuns());
+  double wsumAvg=0.0, wsumSD=0.0;
+  for (unsigned int irun=0; irun<rp.getNumRuns(); irun++)
+    wsum[irun]=0.0;
 
-  clusterStr << "credible regions for # of groups" << endl << endl;
+  for (int i=0; i<numGenes+1; i++){
+    clusterPP[i]=0.0;
+    for (unsigned int irun=0; irun<rp.getNumRuns(); irun++)
+      clusterPP[i] += (double)clusterCount[irun][i];
+    wsumAvg += i * clusterPP[i];
+    clusterPP[i] /= ((double)rp.getNumUpdates() * rp.getNumRuns());
+    for (unsigned int irun=0; irun<rp.getNumRuns(); irun++)
+      wsum[irun] += i* (double)clusterCount[irun][i];
+  }
+  for (unsigned int irun=0; irun<rp.getNumRuns(); irun++)
+    wsum[irun] /= (double)rp.getNumUpdates();
+  wsumAvg /= ((double)rp.getNumUpdates() * rp.getNumRuns());
+
+  clusterStr << "mean #groups = " << setprecision(3) << wsumAvg << endl ;
+  if (rp.getNumRuns()>1){
+    for (unsigned int irun=0; irun<rp.getNumRuns(); irun++)
+      wsumSD += (wsum[irun]-wsumAvg)*(wsum[irun]-wsumAvg);
+    wsumSD = sqrt(wsumSD / (rp.getNumRuns()-1));
+    clusterStr << "SD across runs = " << wsumSD <<endl;
+  }
+  clusterStr << endl ;
+
+  clusterStr << "credible regions for # of groups" << endl;
   clusterStr << "probability region" << endl;
   clusterStr << "------------------" << endl;
 
-  int lo,hi;
-  lo=a;
-  sum = clusterCount[a];
-  while(sum < q005)
-    sum += clusterCount[++lo];
-  hi=a;
-  sum = clusterCount[a];
-  while(sum < q995)
-    sum += clusterCount[++hi];
+  int a=numGenes,b=0;
+  for(int i=0;i<numGenes+1;i++)
+    if(clusterPP[i]>0) {
+      if(a>i)	a = i;
+      if(b<i)	b = i;
+    }
+
+  int lo=a,hi;
+  double sum = clusterPP[lo];
+  while(sum < .005)    sum += clusterPP[++lo];
+  hi=lo;
+  while(sum < .995)    sum += clusterPP[++hi];
   clusterStr << "  0.99      (" << lo << "," << hi << ")" << endl;
-  lo=a;
-  sum = clusterCount[a];
-  while(sum < q025)
-    sum += clusterCount[++lo];
-  hi=a;
-  sum = clusterCount[a];
-  while(sum < q975)
-    sum += clusterCount[++hi];
+
+  lo=a;  sum = clusterPP[lo];
+  while(sum < .025)    sum += clusterPP[++lo];
+  hi=lo;
+  while(sum < .975)    sum += clusterPP[++hi];
   clusterStr << "  0.95      (" << lo << "," << hi << ")" << endl;
-  lo=a;
-  sum = clusterCount[a];
-  while(sum < q050)
-    sum += clusterCount[++lo];
-  hi=a;
-  sum = clusterCount[a];
-  while(sum < q950)
-    sum += clusterCount[++hi];
+
+  lo=a;  sum = clusterPP[lo];
+  while(sum < .050)    sum += clusterPP[++lo];
+  hi=lo;
+  while(sum < .950)    sum += clusterPP[++hi];
   clusterStr << "  0.90      (" << lo << "," << hi << ")" << endl;
-  clusterStr << "------------------" << endl;
+  clusterStr << "------------------" << endl << endl;
+
+  for (unsigned int irun=0; irun<rp.getNumRuns(); irun++){
+    clusterStr << "Distribution of cluster number in run " << irun+1 << ":" << endl;
+    clusterStr << " # of    raw    posterior" << endl;
+    clusterStr << "groups  counts probability" << endl;
+    clusterStr << "--------------------------" << endl;
+    for(int i=a;i<b+1;i++)
+      clusterStr << setw(3) << i << " " << setw(10) << clusterCount[irun][i]
+		 << setw(12) << setprecision(8) << clusterCount[irun][i] / (double)rp.getNumUpdates() << endl;
+    clusterStr << "--------------------------" << endl << endl;
+  }
   clusterStr.close();
   cout << "done." << endl;
   fout << "done." << endl;
+
 
   // .concordance
   cout << "Writing concordance factors to " << fileNames.getConcordanceFile() << "...." << flush;
@@ -1173,18 +1205,29 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
   concordanceStr.setf(ios::fixed, ios::floatfield);
   concordanceStr.setf(ios::showpoint);
 
+  vector<vector<double> > splitsGeneMatrixPP(splits.size());
+  for(int i=0;i<splits.size();i++) {
+    splitsGeneMatrixPP[i].resize(numGenes+1);
+    for(int j=0;j<numGenes+1;j++){
+      splitsGeneMatrixPP[i][j]=0.0;
+      for (unsigned int irun=0; irun<rp.getNumRuns(); irun++)
+	splitsGeneMatrixPP[i][j] += (double)splitsGeneMatrix[irun][i][j];
+      splitsGeneMatrixPP[i][j] /= ((double)rp.getNumUpdates() * rp.getNumRuns());
+    }
+  }
+
   // use TreeWeight class for sorting splits by mean number of genes
   vector<TreeWeight> sw(splits.size());
   for(int i=0;i<splits.size();i++) {
     sw[i].setWeight(0);
     for(int j=0;j<numGenes+1;j++)
-      if(splitsGeneMatrix[i][j]>0)
-	sw[i].addWeight(j* (double)splitsGeneMatrix[i][j]);
+      if(splitsGeneMatrixPP[i][j]>0)
+	sw[i].addWeight(j* splitsGeneMatrixPP[i][j]);
     sw[i].setIndex(i);
   }
   sort(sw.begin(),sw.end(),cmpTreeWeights);
 
-  unsigned int all=0;
+  unsigned int all=0; //fixit: What is this for??
   for(int i=0;i<numTaxa;i++) {
     all <<= 1;
     all += 1;
@@ -1197,7 +1240,7 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
   for(int w=0;w<splits.size();w++) {
     int i = sw[w].getIndex();
     Split s(splits[i],numTaxa);
-    s.setWeight(sw[w].getWeight()/rp.getNumUpdates());
+    s.setWeight(sw[w].getWeight());
     unsigned int y = s.getClade();
     bool add=true;
     for(int j=0;j<ctree.size();j++) {
@@ -1207,17 +1250,30 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
 	break;
       }
     }
+    // fixit: make a vector splitsNotInCtree of splits with CF > .10
     if(add){
       s.updatePriorProbability();
       ctree.push_back(s);
       GenomewideDistribution* g;
       g = new GenomewideDistribution(numGenes, rp.getNumGenomewideGrid());
       g->updatePriorProbability(s);
-      g->updateSamplewide(splitsGeneMatrix[i], rp.getNumUpdates());
+      g->updateSamplewide(splitsGeneMatrixPP[i]);
       if (!mp.getUseIndependencePrior()){ 
 	// under independence: genomewide CF is concentrated on priorProbability.
 	g->updateConvolutionWeight(alphas[0]);
 	g->updateGenomewide(alphas[0]);
+      }
+      double meanpostCFsd=0.0; // SD of estimated sample-wide CF, across runs
+      if (rp.getNumRuns()>1){
+	for (unsigned int irun=0; irun<rp.getNumRuns(); irun++){
+	  double meanpostCF =0.0;
+	  for(int j=0;j<numGenes+1;j++)
+	    meanpostCF += j * (double)splitsGeneMatrix[irun][i][j];
+	  meanpostCF /= (double)rp.getNumUpdates();
+	  meanpostCFsd += (meanpostCF - s.getWeight()) * (meanpostCF - s.getWeight());
+	}
+	meanpostCFsd = sqrt(meanpostCFsd / (rp.getNumRuns()-1));  // number of genes
+	g->setSamplewidePosteriorMeanSD(meanpostCFsd / numGenes); // proportion of genes
       }
       gwDistr.push_back(g);
     }
@@ -1245,13 +1301,18 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
   concordanceStr << "Splits in the Primary Concordance Tree: sample-wide ";
   if (!mp.getUseIndependencePrior())
     concordanceStr << "and genome-wide ";
-  concordanceStr << "mean CF (95% credibility)" << endl;
+  concordanceStr << "mean CF (95% credibility)";
+  if (rp.getNumRuns()>1)
+    concordanceStr << ", SD of mean sample-wide CF across runs";
+  concordanceStr << endl;
+
   for(int w=0;w<ctree.size();w++) {
     ctree[w].print(concordanceStr); 
-    //concordanceStr << " " << setprecision(3) << ctree[w].getWeight() << endl;
     gwDistr[w]->printSampleCF(concordanceStr);
     if (!mp.getUseIndependencePrior())
       gwDistr[w]->printGenomeCF(concordanceStr);
+    if (rp.getNumRuns()>1)
+      concordanceStr << "\t" << gwDistr[w]->getSamplewidePosteriorMeanSD();
     concordanceStr << endl;
   }
   concordanceStr << endl;
@@ -1263,55 +1324,50 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
     Split s(splits[i],numTaxa);
     s.print(concordanceStr);
     concordanceStr << endl;
+
     int a=numGenes,b=0;
     for(int j=0;j<numGenes+1;j++)
-      if(splitsGeneMatrix[i][j]>0) {
-	if(a>j)
-	  a = j;
-	if(b<j)
-	  b = j;
+      if(splitsGeneMatrixPP[i][j]>0) {
+	if(a>j)	a = j;
+	if(b<j)	b = j;
       }
-    concordanceStr << "#Genes      count probability cumulative" << endl;
+
+    concordanceStr << "#Genes      count in run(s) 1";
+    if (rp.getNumRuns()>1)
+      concordanceStr << " through "<< rp.getNumRuns();
+    concordanceStr << ", Overall probability, Overall cumulative probability" << endl;
     double csum=0;
     for(int j=a;j<b+1;j++) {
-      double prob = (double)(splitsGeneMatrix[i][j])/rp.getNumUpdates();
-      csum += prob;
-      concordanceStr << setw(6) << j << " " << setw(10) << splitsGeneMatrix[i][j]
-		     << setw(12) << setprecision(6) << prob
-		     << setw(11) << setprecision(6) << csum << endl;
+      concordanceStr << setw(6) << j ;
+      for (unsigned int irun=0; irun<rp.getNumRuns(); irun++)
+	concordanceStr << " " << setw(10) << splitsGeneMatrix[irun][i][j];
+      csum += splitsGeneMatrixPP[i][j];
+      concordanceStr << " " << setw(12) << setprecision(6) << splitsGeneMatrixPP[i][j]
+		     << " " << setw(11) << setprecision(6) << csum << endl;
     }
     concordanceStr << endl;
-    wsum=0;
-    for(int j=a;j<b+1;j++)
-      wsum += j* ( splitsGeneMatrix[i][j] / (double)rp.getNumUpdates());
-    concordanceStr << "mean CF = " << setprecision(3) << wsum << endl;
-    int lo,hi;
-    lo=a;
-    sum = splitsGeneMatrix[i][a];
-    while(sum < q005)
-      sum += splitsGeneMatrix[i][++lo];
-    hi=a;
-    sum = splitsGeneMatrix[i][a];
-    while(sum < q995)
-      sum += splitsGeneMatrix[i][++hi];
+    concordanceStr << "mean CF = " << setw(7) << setprecision(3) << sw[w].getWeight() / numGenes << " (proportion of loci)" << endl;
+    concordanceStr << "        = " << setw(7) << setprecision(3) << sw[w].getWeight()            << " (number of loci)" << endl;
+
+    int lo=a,hi;
+    sum = splitsGeneMatrixPP[i][lo];
+    while(sum < .005)  sum += splitsGeneMatrixPP[i][++lo];
+    hi=lo;
+    while(sum < .995)  sum += splitsGeneMatrixPP[i][++hi];
     concordanceStr << "99% CI for CF = (" << lo << "," << hi << ")" << endl;
+
     lo=a;
-    sum = splitsGeneMatrix[i][a];
-    while(sum < q025)
-      sum += splitsGeneMatrix[i][++lo];
-    hi=a;
-    sum = splitsGeneMatrix[i][a];
-    while(sum < q975)
-      sum += splitsGeneMatrix[i][++hi];
+    sum = splitsGeneMatrixPP[i][lo];
+    while(sum < .025)  sum += splitsGeneMatrixPP[i][++lo];
+    hi=lo;
+    while(sum < .975)  sum += splitsGeneMatrixPP[i][++hi];
     concordanceStr << "95% CI for CF = (" << lo << "," << hi << ")" << endl;
+
     lo=a;
-    sum = splitsGeneMatrix[i][a];
-    while(sum < q050)
-      sum += splitsGeneMatrix[i][++lo];
-    hi=a;
-    sum = splitsGeneMatrix[i][a];
-    while(sum < q950)
-      sum += splitsGeneMatrix[i][++hi];
+    sum = splitsGeneMatrixPP[i][lo];
+    while(sum < .050)  sum += splitsGeneMatrixPP[i][++lo];
+    hi=lo;
+    while(sum < .950)  sum += splitsGeneMatrixPP[i][++hi];
     concordanceStr << "90% CI for CF = (" << lo << "," << hi << ")" << endl << endl;
   }
   concordanceStr.close();
@@ -1368,7 +1424,7 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
   fout << "Writing single and joint gene posteriors to " << fileNames.getGenePosteriorFile() << "...." << flush;
   ofstream genePostStr(fileNames.getGenePosteriorFile().c_str());
   for(int i=0;i<numGenes;i++)
-    genes[i]->print(genePostStr,newTable,rp.getNumUpdates(),topologies,max);
+    genes[i]->print(genePostStr,newTable,rp.getNumUpdates()*rp.getNumRuns(),topologies,max);
   genePostStr.close();
   cout << "done." << endl;
   fout << "done." << endl;
@@ -1376,23 +1432,25 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
   if(rp.getNumChains()>1) {
     cout.setf(ios::fixed, ios::floatfield);
     cout.setf(ios::showpoint);
-    cout << "MCMCMC acceptance statistics:" << endl;
-    cout << " alpha1 <--> alpha2 accepted proposed proportion" << endl;
     fout.setf(ios::fixed, ios::floatfield);
     fout.setf(ios::showpoint);
-    fout << "MCMCMC acceptance statistics:" << endl;
-    fout << " alpha1 <--> alpha2 accepted proposed proportion" << endl;
-    for(int i=0;i<rp.getNumChains()-1;i++) {
-      cout << setw(15) << alphas[i] << " <-->" << setw(15) << alphas[i+1];
-      cout << setw(9) << mcmcmcAccepts[i] << setw(9) << mcmcmcProposals[i];
-      fout << setw(15) << alphas[i] << " <-->" << setw(15) << alphas[i+1];
-      fout << setw(9) << mcmcmcAccepts[i] << setw(9) << mcmcmcProposals[i];
-      if(mcmcmcProposals[i] > 0) {
-	cout << setw(11) << setprecision(6) << (double) (mcmcmcAccepts[i]) / (double) (mcmcmcProposals[i]);
-	fout << setw(11) << setprecision(6) << (double) (mcmcmcAccepts[i]) / (double) (mcmcmcProposals[i]);
+    for (unsigned int irun=0; irun<rp.getNumRuns(); irun++){
+      cout << "\nMCMCMC acceptance statistics in run " << irun+1 <<":" << endl;
+      cout << "         alpha1 <-->         alpha2 accepted proposed proportion" << endl;
+      fout << "\nMCMCMC acceptance statisticsin run " << irun+1 <<":" << endl;
+      fout << "alpha1          <--> alpha2         accepted proposed proportion" << endl;
+      for(int i=0;i<rp.getNumChains()-1;i++) {
+	cout << setw(15) << alphas[i] << " <-->" << setw(15) << alphas[i+1];
+	cout << setw(9) << mcmcmcAccepts[irun][i] << setw(9) << mcmcmcProposals[irun][i];
+	fout << setw(15) << alphas[i] << " <--> " << setw(15) << alphas[i+1];
+	fout << setw(9) << mcmcmcAccepts[irun][i] << setw(9) << mcmcmcProposals[irun][i];
+	if(mcmcmcProposals[irun][i] > 0) {
+	  cout << setw(11) << setprecision(6) << (double) (mcmcmcAccepts[irun][i]) / (double) (mcmcmcProposals[irun][i]);
+	  fout << setw(11) << setprecision(6) << (double) (mcmcmcAccepts[irun][i]) / (double) (mcmcmcProposals[irun][i]);
+	}
+	cout << endl;
+	fout << endl;
       }
-      cout << endl;
-      fout << endl;
     }
   }
 }
@@ -1456,7 +1514,7 @@ int main(int argc, char *argv[])
   showParameters(fout,fileNames,defaults,mp,rp);
   fout << endl;
 
-  if(numTaxa > 32) {
+  if(numTaxa > 32) { // are you sure it works with exactly 32 taxa?
     cerr << "Error: BUCKy version " << VERSION << " only works with 32 or fewer taxa." << endl;
     fout << "Error: BUCKy version " << VERSION << " only works with 32 or fewer taxa." << endl << flush;
     exit(1);
@@ -1586,12 +1644,15 @@ int main(int argc, char *argv[])
     }
   }
 
-  // splitsGeneMatrix[i][j] = the number of times that split i is in exactly j genes
-  vector<vector<int> > splitsGeneMatrix(splits.size());
-  for(int i=0;i<splits.size();i++) {
-    splitsGeneMatrix[i].resize(numGenes+1);
-    for(int j=0;j<numGenes+1;j++)
-      splitsGeneMatrix[i][j] = 0;
+  // splitsGeneMatrix[irun][i][j] = the number of times that split i is in exactly j genes, in run 'irun'.
+  vector<vector<vector<int> > > splitsGeneMatrix(rp.getNumRuns());
+  for (unsigned int irun=0; irun<rp.getNumRuns(); irun++){
+    splitsGeneMatrix[irun].resize(splits.size());
+    for(int i=0;i<splits.size();i++) {
+      splitsGeneMatrix[irun][i].resize(numGenes+1);
+      for(int j=0;j<numGenes+1;j++)
+	splitsGeneMatrix[irun][i][j] = 0;
+    }
   }
   cout << "done." << endl;
   fout << "done." << endl;
@@ -1621,23 +1682,34 @@ int main(int argc, char *argv[])
   for(int i=1;i<rp.getNumChains();i++)
     alphas[i] = rp.getAlphaMultiplier()*alphas[i-1];
 
-  vector<State*> states(rp.getNumChains());
-  vector<int> index(rp.getNumChains());
-  for(int i=0;i<rp.getNumChains();i++) {
-    states[i] = new State(alphas[i],numTaxa,numTrees,genes,mp.getUseIndependencePrior(),rand);
-    index[i] = i;
+  vector<vector<State*> > states(rp.getNumRuns());
+  for (unsigned int irun=0; irun<rp.getNumRuns(); irun++)
+    states[irun].resize(rp.getNumChains());
+
+  vector<vector<int> > index(rp.getNumRuns());
+  for (unsigned int irun=0; irun<rp.getNumRuns(); irun++)
+    index[irun].resize(rp.getNumChains());
+
+  for (unsigned int irun=0; irun<rp.getNumRuns(); irun++)
+    for(int i=0;i<rp.getNumChains();i++) {
+      states[irun][i] = new State(alphas[i],numTaxa,numTrees,genes,mp.getUseIndependencePrior(),rand);
+      index[irun][i] = i;
   }
   cout << "done." << endl;
   fout << "done." << endl;
 
   cout << "Initializing MCMCMC acceptance counters and pairwise counters...." << flush;
   fout << "Initializing MCMCMC acceptance counters and pairwise counters...." << flush;
-  vector<int> mcmcmcAccepts(rp.getNumChains());
-  vector<int> mcmcmcProposals(rp.getNumChains());
-  for(int i=0;i<rp.getNumChains();i++)
-    mcmcmcAccepts[i] = mcmcmcProposals[i] = 0;
+  vector<vector<int> > mcmcmcAccepts(rp.getNumRuns());
+  vector<vector<int> > mcmcmcProposals(rp.getNumRuns());
+  for (unsigned int irun=0; irun<rp.getNumRuns(); irun++){
+    mcmcmcAccepts[irun].resize(rp.getNumChains());
+    mcmcmcProposals[irun].resize(rp.getNumChains());
+    for (int i=0;i<rp.getNumChains();i++)
+      mcmcmcAccepts[irun][i] = mcmcmcProposals[irun][i] = 0;
+  }
 
-  vector<vector<int> > pairCounts(numGenes);
+  vector<vector<int> > pairCounts(numGenes); // not adapted to several runs. Runs will be pooled. fixit?
   for(int i=0;i<numGenes;i++) {
     pairCounts[i].resize(numGenes);
     for(int j=0;j<numGenes;j++)
@@ -1654,26 +1726,23 @@ int main(int argc, char *argv[])
   fout << "0   10   20   30   40   50   60   70   80   90   100" << endl;
   fout << "+----+----+----+----+----+----+----+----+----+----+" << endl << flush;
   int part = numBurn / 50;
-  int extra = numBurn % 50;
   for(int cycle=0;cycle<numBurn;cycle++) {
     if( (part > 0)  && (cycle % part == 0) ) {
       cout << "*" << flush;
       fout << "*" << flush;
     }
-    for(int i=0;i<rp.getNumChains();i++) {
-      states[i]->update(rand);
-      if(rp.getUseUpdateGroups()) {
-	int gene = (int)(rand.runif()*genes.size());
-	states[i]->updateOneGroup(gene,rand);
+    for (unsigned int irun=0; irun<rp.getNumRuns(); irun++){
+      for(int i=0;i<rp.getNumChains();i++) {
+	states[irun][i]->update(rand);
+	if(rp.getUseUpdateGroups()) {
+	  int gene = (int)(rand.runif()*genes.size());
+	  states[irun][i]->updateOneGroup(gene,rand);
+	}
       }
-    }
 
-    if(cycle % rp.getMCMCMCRate() == 0 && rp.getNumChains()>1)
-      mcmcmc(states,index,alphas,rand,mcmcmcAccepts,mcmcmcProposals);
-  }
-  for(int i=0;i<extra;i++) {
-    cout << "*";
-    fout << "*";
+      if(cycle % rp.getMCMCMCRate() == 0 && rp.getNumChains()>1)
+	mcmcmc(states[irun],index[irun],alphas,rand,mcmcmcAccepts[irun],mcmcmcProposals[irun]);
+    }
   }
   cout << "*" << endl;
   cout << " ....done." << endl << flush;
@@ -1683,11 +1752,14 @@ int main(int argc, char *argv[])
   cout << "Initializing summary tables..." << flush;
   fout << "Initializing summary tables..." << flush;
 
-  vector<int> clusterCount(numGenes+1);
-  for(int i=0;i<clusterCount.size();i++)
-    clusterCount[i] = 0;
+  vector<vector<int> > clusterCount(rp.getNumRuns());
+  for (unsigned int irun=0; irun<rp.getNumRuns(); irun++){
+    clusterCount[irun].resize(numGenes+1);
+    for(int i=0;i<clusterCount[irun].size();i++)
+      clusterCount[irun][i] = 0;
+  }
 
-  vector<vector<int> > newTable(numTrees);
+  vector<vector<int> > newTable(numTrees); // fixit: not adapted to several runs. Should it be?
   for(int i=0;i<numTrees;i++) {
     newTable[i].resize(numGenes);
     for(int j=0;j<numGenes;j++)
@@ -1698,8 +1770,15 @@ int main(int argc, char *argv[])
   fout << "done." << endl << flush;
 
   if(rp.getCreateSampleFile()) {
-    cout << "Sampled topologies will be in file " << fileNames.getSampleFile() << "." << endl;
-    fout << "Sampled topologies will be in file " << fileNames.getSampleFile() << "." << endl;
+    cout << "Sampled topologies will be in file(s) " << fileNames.getSampleFile(1);
+    fout << "Sampled topologies will be in file(s) " << fileNames.getSampleFile(1);
+    if(rp.getNumRuns()==1){
+      cout << "." << endl;
+      fout << "." << endl;
+    } else {
+      cout << " to " << fileNames.getSampleFile(rp.getNumRuns()) << "." << endl;
+      fout << " to " << fileNames.getSampleFile(rp.getNumRuns()) << "." << endl;
+    }
   }
 
   cout << "Beginning " << rp.getNumUpdates() << " MCMC updates..." << endl;
@@ -1710,51 +1789,66 @@ int main(int argc, char *argv[])
   fout << "+----+----+----+----+----+----+----+----+----+----+" << endl << flush;
   part = rp.getNumUpdates() / 50;
 
-  ofstream sampleFileStr;
+  vector<ofstream*> sampleFileStr(rp.getNumRuns());
   if(rp.getCreateSampleFile()) {
-    sampleFileStr.open(fileNames.getSampleFile().c_str());
-    sampleFileStr.setf(ios::fixed, ios::floatfield);
-    sampleFileStr.setf(ios::showpoint);
+    for (unsigned int irun=0; irun<rp.getNumRuns(); irun++){
+      sampleFileStr[irun] = new ofstream(fileNames.getSampleFile(irun+1).c_str());
+      if (sampleFileStr[irun]->fail()){
+	cerr << "Error: could not open file " << fileNames.getSampleFile(irun+1) << endl;
+	exit(1);
+      }
+      sampleFileStr[irun]->setf(ios::fixed, ios::floatfield);
+      sampleFileStr[irun]->setf(ios::showpoint);
+    }
   }
 
-  vector<int> accept(rp.getNumChains());
-  for(int i=0;i<rp.getNumChains();i++)
-    mcmcmcAccepts[i] = mcmcmcProposals[i] = accept[i] = 0;
+  vector<vector<int> > accept(rp.getNumRuns());
+  for (unsigned int irun=0; irun<rp.getNumRuns(); irun++){
+    accept[irun].resize(rp.getNumChains());
+    for(int i=0;i<rp.getNumChains();i++)
+      mcmcmcAccepts[irun][i] = mcmcmcProposals[irun][i] = accept[irun][i] = 0;
+  }
 
   for(int cycle=0;cycle<rp.getNumUpdates();cycle++) {
-    for(int i=0;i<rp.getNumChains();i++) {
-      accept[index[i]] += states[i]->update(rand);
-      if(rp.getUseUpdateGroups()) {
-	int group = (int)(rand.runif()*states[i]->getNumGroups());
-	states[i]->updateOneGroup(group,rand);
+    for (unsigned int irun=0; irun<rp.getNumRuns(); irun++){
+      for(int i=0;i<rp.getNumChains();i++) {
+	accept[irun][index[irun][i]] += states[irun][i]->update(rand);
+	if(rp.getUseUpdateGroups()) {
+	  int group = (int)(rand.runif()*states[irun][i]->getNumGroups());
+	  states[irun][i]->updateOneGroup(group,rand);
+	}
+      }
+      if(cycle % rp.getMCMCMCRate() == 0 && rp.getNumChains()>1)
+	mcmcmc(states[irun],index[irun],alphas,rand,mcmcmcAccepts[irun],mcmcmcProposals[irun]);
+      // update counts
+      int i0 = index[irun][0];
+      states[irun][i0]->updateTable(newTable);
+      states[irun][i0]->updateSplits(splitsGeneMatrix[irun],topologySplitsIndexMatrix);
+      clusterCount[irun][states[irun][i0]->getNumGroups()]++;
+      if( rp.getCalculatePairs() && cycle % rp.getSubsampleRate() == 0)
+	states[irun][i0]->updatePairCounts(pairCounts);
+      if( rp.getCreateSampleFile() && cycle % rp.getSubsampleRate() == 0) {
+	*sampleFileStr[irun] << setw(8) << accept[irun][0];
+	accept[irun][0] = 0;
+	states[irun][i0]->sample(*sampleFileStr[irun]);
       }
     }
-    if(cycle % rp.getMCMCMCRate() == 0 && rp.getNumChains()>1)
-      mcmcmc(states,index,alphas,rand,mcmcmcAccepts,mcmcmcProposals);
-    // update counts
-    int i0 = index[0];
-    states[i0]->updateTable(newTable);
-    states[i0]->updateSplits(splitsGeneMatrix,topologySplitsIndexMatrix);
-    clusterCount[states[i0]->getNumGroups()]++;
     if( cycle % part == 0) {
       cout << "*" << flush;
       fout << "*" << flush;
     }
-    if( rp.getCalculatePairs() && cycle % rp.getSubsampleRate() == 0)
-      states[i0]->updatePairCounts(pairCounts);
-    if( rp.getCreateSampleFile() && cycle % rp.getSubsampleRate() == 0) {
-      sampleFileStr << setw(8) << accept[0];
-      accept[0] = 0;
-      states[i0]->sample(sampleFileStr);
-    }
   }
+
   cout << "*" << endl;
   cout << " ....done." << endl << flush;
   fout << "*" << endl;
   fout << " ....done." << endl << flush;
 
   if(rp.getCreateSampleFile())
-    sampleFileStr.close();
+    for (unsigned int irun=0; irun<rp.getNumRuns(); irun++){
+	 sampleFileStr[irun]->close();
+	 delete sampleFileStr[irun];
+    }
 
   writeOutput(fout,fileNames,max,numTrees,numTaxa,topologies,numGenes,rp,mp,
 	      newTable,clusterCount,splits,splitsGeneMatrix,
@@ -1763,8 +1857,10 @@ int main(int argc, char *argv[])
   for(int i=0;i<numGenes;i++)
     delete genes[i];
 
-  for(int i=0;i<rp.getNumChains();i++)
-    delete states[i];
+  for (unsigned int irun=0; irun<rp.getNumRuns(); irun++)
+    for(int i=0;i<rp.getNumChains();i++)
+      delete states[irun][i];
+  
 
   time_t endTime;
   time(&endTime);

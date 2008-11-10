@@ -1034,6 +1034,11 @@ public:
   string getOutFile() { return outFile; }
   string getPairTreeFile() { return pairTreeFile; }
   string getSampleFile() { return sampleFile; }
+  string getSampleFile(unsigned int k) {
+    ostringstream run_k;
+    run_k << k;
+    return(sampleFile + ".run" + run_k.str());
+  }
   string getSingleFile() { return singleFile; }
   //  string getSplitsFile() { return splitsFile; }
   //  string getTopologyFile() { return topologyFile; }
@@ -1078,6 +1083,7 @@ public:
     seed2(5678),
     numUpdates(100000),
     subsampleRate(1),
+    numRuns(2),
     numChains(1),
     mcmcmcRate(100),
     calculatePairs(false),
@@ -1097,6 +1103,8 @@ public:
   void setNumUpdates(unsigned int x) { numUpdates = x; }
   unsigned int getSubsampleRate() { return subsampleRate; }
   void setSubsampleRate(unsigned int x) { subsampleRate = x; }
+  unsigned int getNumRuns() { return numRuns; }
+  void setNumRuns(unsigned int x) { numRuns = x; }
   unsigned int getNumChains() { return numChains; }
   void setNumChains(unsigned int x) { numChains = x; }
   unsigned int getMCMCMCRate() { return mcmcmcRate; }
@@ -1115,7 +1123,7 @@ public:
   void setCreateSingleFile(bool x) { createSingleFile = x; }
 private:
   double alphaMultiplier;
-  unsigned int seed1,seed2,numUpdates,subsampleRate,numChains,mcmcmcRate,numGenomewideGrid;
+  unsigned int seed1,seed2,numUpdates,subsampleRate,numRuns,numChains,mcmcmcRate,numGenomewideGrid;
   bool calculatePairs;
   bool useUpdateGroups;
   bool createSampleFile;
@@ -1128,6 +1136,7 @@ public:
   Defaults(FileNames &fn,ModelParameters &mp,RunParameters &rp) :
     alpha(mp.getAlpha()),
     numUpdates(rp.getNumUpdates()),
+    numRuns(rp.getNumRuns()),
     numChains(rp.getNumChains()),
     mcmcmcRate(rp.getMCMCMCRate()),
     alphaMultiplier(rp.getAlphaMultiplier()),
@@ -1147,6 +1156,7 @@ public:
   void print(ostream&);
   double getAlpha() { return alpha; }
   unsigned int getNumUpdates() { return numUpdates; }
+  unsigned int getNumRuns() { return numRuns; }
   unsigned int getNumChains() { return numChains; }
   unsigned int getMCMCMCRate() { return mcmcmcRate; }
   double getAlphaMultiplier() { return alphaMultiplier; }
@@ -1165,7 +1175,7 @@ public:
 private:
   double alpha;
   unsigned int numUpdates;
-  unsigned int numChains;
+  unsigned int numChains, numRuns;
   unsigned int mcmcmcRate;
   double alphaMultiplier;
   unsigned int subsampleRate;
@@ -1224,7 +1234,10 @@ class GenomewideDistribution {
     samplewidePosteriorMean = s.getWeight()/(samplewide.size()-1.0);
   };
   void updateConvolutionWeight(double);
+  void updateSamplewide(vector<double> &);
   void updateSamplewide(vector<int> &, unsigned int);
+  void setSamplewidePosteriorMeanSD(double x){ samplewidePosteriorMeanSD = x;}
+  double getSamplewidePosteriorMeanSD(){ return samplewidePosteriorMeanSD;}
   void updateGenomewide(double);
   void printSampleCF(ostream&);
   void printGenomeCF(ostream&);
@@ -1234,7 +1247,7 @@ class GenomewideDistribution {
   vector<vector<double> > convolutionWeight;
   vector<double> samplewide;
   vector<double> genomewide;
-  double genomewidePosteriorMean,samplewidePosteriorMean;
+  double genomewidePosteriorMean,samplewidePosteriorMean, samplewidePosteriorMeanSD;
   vector<double> samplewideCredibilityInterval, genomewideCredibilityInterval; 
   // vectors of size 6: lo(99%), lo(95%), lo(90%), hi(90%), hi(95%), hi(99%).
 };
