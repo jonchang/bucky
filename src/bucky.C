@@ -722,6 +722,10 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
       istringstream f(num);
       if( !(f >> numRuns) )
 	usage(defaults);
+      if (numRuns==0){
+	cerr << "Warning: parameter number-of-runs must be at least one. Setting to default: -k 2." << endl;
+	numRuns=2;
+      }
       rp.setNumRuns(numRuns);
       k++;
     }

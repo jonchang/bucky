@@ -41,7 +41,8 @@
 \bigskip
 
 Version 1.2, 17 January 2008\\
-Copyright\copyright{} 2008 by Bret Larget
+Copyright\copyright{} 2008 by Bret Larget\\
+Last updated: 11 November 2008
 \medskip
 
 {\small
@@ -96,13 +97,13 @@ and example data, do these commands:
 cd $BUCKY_HOME
 tar -xzvf bucky-1.2.tgz
 \end{verbatim}              %$
-This creates a directory named {\tt BUCKy-1.2} with subdirectories
-{\tt BUCKy-1.2/data} and {\tt BUCKy-1.2/src}.
+This creates a directory named {\tt bucky} with subdirectories
+{\tt bucky/data} and {\tt bucky/src}.
 
 \paragraph{Compilation.} If you have gcc installed, compile
 the software with these commands.
 \begin{verbatim}
-cd $BUCKY_HOME/BUCKy-1.2/src
+cd $BUCKY_HOME/bucky/src
 make
 \end{verbatim}   %$
 This will compile programs {\tt mbsum} and {\tt bucky}.
@@ -152,7 +153,7 @@ probabilities from a given locus (as obtained in the first step of BCA).
 \end{verbatim}
  
 \paragraph{Syntax and Options.}
-To run {\tt mbsum} on a single file, type:
+To run {\tt mbsum} for a single data file, type:
 \begin{verbatim}
 mbsum [-h] [--help] [-n #] [-o filename] [--version] <inputfilename(s)> 
 \end{verbatim}
@@ -179,17 +180,17 @@ mbsum -n 5000 -o mygene mygene.run?.t
 Here is a description of the available options.
 \begin{center}
 \begin{tabular}{p{1.59in}|p{4.7in}}
-{\tt [-h]} or \verb+[--help]+& prints a help message describing the options
+{\tt -h} or \verb+[--help]+& prints a help message describing the options
 then quits.\\
-{\tt [-n \#]} or \verb+[--skip #]+& This option allows the user to 
+{\tt -n \#} or \verb+[--skip #]+& This option allows the user to 
 skips lines of trees before actually starting the tally tree 
 topologies. The default is 0, i.e {\em no} tree is skipped. 
 The same number of trees will be skipped in each input file.\\
-{\tt [-o filename]} or \verb+[--out filename]+& sets the output file name. A single output
+{\tt -o filename} or \verb+--out filename+& sets the output file name. A single output
 file will be created even if there are multiple input files.
 The tally combines all trees (except skipped trees) found in all 
 files. \\
-\verb+[--version]+& prints the program's name and version then quits.
+\verb+--version+& prints the program's name and version then quits.
 \end{tabular}\end{center}
 \com{ fixit:
  Since {\tt mbsum} needs to be run on all tree files {\tt *.t}, we provide
@@ -199,8 +200,19 @@ files. \\
  \end{verbatim} %$ (doesn't work with version 1.2)
 }
 
+\noindent
+Example: the raw data and output from MrBayes are provided for the
+very first gene in the set analyzed in \cite{ane-etal-2008}.
+They are located in \verb+$BUCKY_HOME/bucky/data/yeast/y000/+. 
+The tree files from MrBayes, named \verb+y000.run1.t+ through
+\verb+y000.run4.t+, each contain 5501 trees. 
+They can be summarized with:
+\begin{verbatim}
+mbsum -n 501 -o y000.in    $BUCKY_HOME/bucky/data/yeast/y000/y000.run?.t
+\end{verbatim}
+
 \paragraph{Warnings.}  
-{\tt mbsum} will overwrite a file named \verb+<filename>.in+
+{\tt mbsum} will overwrite a file named \verb+filename+
 if such a file exists.
 Most importantly, \texttt{mbsum} assumes that the same 
 translation table applies to all files, i.e. that taxon 1
@@ -227,70 +239,69 @@ directory, you can run bucky with the default parameters by typing this:
 bucky *.in
 \end{verbatim}
 
-\paragraph{Options.} Next, we describe the available options and the output 
-of the program. 
+\paragraph{Options.} \hspace{1cm}
+
 \bigskip
 
-%\hspace*{-1in}
-%\begin{tabular}{l|p{5in}}
 \noindent
-\begin{tabular}{l|p{4.5in}}
-{\tt [-o output-file-root]}&This option sets the names of output 
+\hspace*{-.2in}
+\begin{tabular}{l|p{4.6in}}
+{\tt -o output-file-root}&This option sets the names of output 
 files. Default is {\tt run1}.\\
-{\tt [-a alpha]}&$\alpha$ is the {\it a priori} level of discordance among 
+{\tt -a alpha}&$\alpha$ is the {\it a priori} level of discordance among 
 loci. Default $\alpha$ is 1.\\
-{\tt [-n number-generations]}&Use this option to increase the number of 
+{\tt -n number-generations}&Use this option to increase the number of 
 updates (default: 100,000). An extra number of updates will actually be 
 performed for burnin. This number will be 10\% of the desired number {\tt n} 
 of post-burning updates. The default, then, is to perform 10,000 updates for 
 burnin, which will be discarded, and then 100,000 more updates.\\
-{\tt [-h]} or \verb+[--help]+&Prints a help message describing options,
+{\tt -h} or \verb+--help+&Prints a help message describing options,
 then quits.\\
-{\tt [-c number-chains]}&Use this option to run Metropolis coupled MCMC (or MCMCMC), 
+{\tt -k number-runs}&Runs $k$ independent analyses. Default is 2.\\
+{\tt -c number-chains}&Use this option to run Metropolis coupled MCMC (or MCMCMC), 
 whereby hot chains are run in addition to the standard (cold) chain. 
 These chains occasionally swap states, so as to improve their mixing. 
 The option sets the total number of chains, including the cold one. 
 Default is 1, i.e. no heated chains.\\
-{\tt [-r MCMCMC-rate]}&When Metropolis coupled MCMC is used, this option
+{\tt -r MCMCMC-rate}&When Metropolis coupled MCMC is used, this option
 controls the rate $r$ with which chains try to swap states: a swap
 is proposed once every $r$ updates. Default is 100.\\
-{\tt [-m alpha-multiplier]}&Warm and hot chains, in MCMCMC, use higher values 
+{\tt -m alpha-multiplier}&Warm and hot chains, in MCMCMC, use higher values 
 of $\alpha$ than does the cold chain. The cold chain uses the $\alpha$ value 
 given by the option {\tt -a}. Warmer chains will use parameters 
 $m\alpha, m^2\alpha,\dots, m^{c-1}\alpha$. Default $m$ is 10.
 The independence prior corresponds to $\alpha=\infty$ so MCMCMC is not used
 with this prior.\\
-{\tt [-s subsample-rate]}&Use this option for thinning the sample. All post-burnin samples
+{\tt -s subsample-rate}&Use this option for thinning the sample. All post-burnin samples
 will be used for summarizing the posterior distribution of gene-to-tree maps, 
 but you may choose to save just a subsample of these gene-to-tree maps. One sample
 will be saved every $s$ updates. This option will have an effect only if option
 \verb+--create-sample-file+ is chosen. Default is 1: no thinning.\\
-{\tt [-s1 seed1]}&Default is 1234. 
+{\tt -s1 seed1}&Default is 1234. 
 %Two seeds are used by the random number generator.
 \\
-{\tt [-s2 seed2]}&Default is 5678.\\
-\verb+[--calculate-pairs]+&Use this option if you want to calculate the 
-posterior probability that pairs of loci share the same tree. Default is 
-to {\sc not} use this option.\\
-\verb+[--create-sample-file]+&Use this option for saving samples of gene-to-tree maps.
-Default is to {\sc not} use this option: samples are not saved. Saving all samples can slow down the program.\\
-\verb+[--create-joint-file]+&This option creates a {\tt .joint} file
-(see below). {\sc not} created by default.\\
-\verb+[--create-single-file]+&This option creates a {\tt .single} file
-(see below). {\sc not} created by default.
+{\tt -s2 seed2}&Default is 5678.
 \end{tabular}
 
-%\hspace*{-1in}
-%\begin{tabular}{l|p{4.7in}}
 \noindent
-\begin{tabular}{l|p{3.9in}}
-\verb+[--use-independence-prior]+&Use this option if you want to assume {\it a priori}
+\hspace*{-.3in}
+\begin{tabular}{l|p{4.4in}}
+\verb+--calculate-pairs+&Use this option to calculate the 
+posterior probability that pairs of loci share the same tree. Default is 
+to {\sc not} use this option.\\
+\verb+--create-sample-file+&Use this option for saving samples of gene-to-tree maps.
+Default is to {\sc not} use this option: samples are not saved. Saving all samples can slow down the program.\\
+\verb+--create-joint-file+&This option creates a {\tt .joint} file. 
+{\sc not} created by default.\\
+\verb+--create-single-file+&This option creates a {\tt .single} file. 
+{\sc not} created by default. \\
+\verb+--use-independence-prior+&Use this option to assume {\it a priori}
 that loci choose their trees independently of each other. This is equivalent
 to setting $\alpha=\infty$. Default is to {\sc not} use this option.\\
-\verb+[--use-update-groups]+&Use this option if you want to permit all loci 
-in a group to be updated to another tree. Default is to use this option, as 
-it improves mixing.\\
-\verb+[--do-not-use-update-groups]+&Use this option to disable the update that 
+\verb+--use-update-groups+&Use this option to permit all loci 
+in a group to be updated to another tree. Default is to use this option,
+because it improves mixing.\\
+\verb+--do-not-use-update-groups+&Use this option to disable the update that 
 changes the tree of all loci in a group in a single update. Default is to 
 {\sc not} use this option. If both options \verb+--use-update-groups+ and 
 \verb+--do-not-use-update-groups+ are used, only the last one is applied. 
@@ -336,7 +347,7 @@ refers to loci in the entire genome.
 %\hspace*{-1in}
 %\begin{tabular}{l|p{5.5in}}
 \noindent
-\begin{tabular}{l|p{4.5in}}
+\begin{tabular}{l|p{5.1in}}
 {\tt .concordance}&Main output: 
 this file first gives the primary concordance tree topology in parenthetical 
 format and again the same tree with the posterior means of 
@@ -358,7 +369,7 @@ instead of proportions. \\
 clusters, as well as credibility intervals. A cluster is a group of loci 
 sharing the same tree topology. Loci in different clusters have different 
 tree topologies.\\
-{\tt .pairs}&Gives a $k$ by $k$ similarity matrix, $k$ being the number 
+{\tt .pairs}&Gives an $l$ by $l$ similarity matrix, $l$ being the number 
 of loci. Entries are the posterior probability that two given loci share 
 the same tree.\\
 {\tt .gene}& For each locus, gives the list of all topologies 
@@ -376,8 +387,8 @@ tree topology are in the same cluster),
 the log-posterior probability of the gene-to-tree map 
 up to an additive constant
 \com{fixit: NOT sure at all. Bret: please check!}
-followed by the gene-to-tree map. If there are $k$ loci, this map is just 
-a list of $k$ trees. Trees are given by their indices. The correspondance
+followed by the gene-to-tree map. If there are $l$ loci, this map is just 
+a list of $l$ trees. Trees are given by their indices. The correspondance
 between tree index and tree parenthetical description can be found in the
 {\tt .gene} or {\tt .single} file.\\
 %\end{tabular}
@@ -387,58 +398,57 @@ between tree index and tree parenthetical description can be found in the
 {\tt .joint}&Gives a table with topologies in rows and loci in columns,
 similar to file {\tt .single} file. Topologies are 
 named by their indices as well as by their parenthetical descriptions. 
-Entries are frequencies with which each locus was mapped to each topology.\\ 
+Entries are posterior probabilities (averaged across all runs) 
+that each locus was mapped to each topology.\\ 
 \end{tabular}
 
 \section{Examples}
 
 The example data provided with the program is organized as follows:
-directory\\ \verb+$BUCKY_HOME/BUCKy-1.2/data/example1/+ %$
+directory\\ \verb+$BUCKY_HOME/bucky/data/example1/+ %$
 contains 10 folders named {\tt ex0} to {\tt ex9}, one for each locus. 
 These 10 folders contain a single file each, named {\tt ex.in}, which was 
 created by  {\tt mbsum}. For analyzing these data, one
 can use the default parameters and type
 \begin{verbatim}
-bucky $BUCKY_HOME/BUCKy-1.2/data/example1/ex?/ex.in
+bucky $BUCKY_HOME/bucky/data/example1/ex?/ex.in
 \end{verbatim}%$
 The question mark will match any character (any digit 0 to 9 in
 particular), so that all 10 locus files will be used for the analysis.
-The following commands will run {\tt bucky} twice, with 
-$\alpha=5$, no MCMCMC, group updates disabled, and one million updates.
-To have independent runs, seeds are changed. (keep each of these two
-commands on a single line).
+The following command will run {\tt bucky} with 
+$\alpha=5$, no MCMCMC, group updates disabled, 2 independent runs (default), 
+one million updates and user-defined seeds (keep this command on a single line).
 
 \begin{verbatim}
 bucky -n 1000000 -a 5 -s1 745203 -s2 905423 --do-not-use-update-groups 
-                                $BUCKY_HOME/BUCKy-1.2/data/example1/ex?/ex.in
-bucky -n 1000000 -a 5 --do-not-use-update-groups -s1 4948537 -s2 8764223
-                                $BUCKY_HOME/BUCKy-1.2/data/example1/ex?/ex.in
+                                    $BUCKY_HOME/bucky/data/example1/ex?/ex.in
 \end{verbatim}
 
-After the first run, a look at the file {\tt run1.gene} shows that all 
-genes give a 100\% estimated posterior probability to tree 0 and 0\% estimated
-posterior probability to other trees. However, after the second run we
-see that tree 1 receives 100\% estimated posterior probability by all loci, 
-instead of tree 0. So the two runs are in very strong disagreement. 
-A look at the {\tt run1.concordance} files would have shown this disagreement
-too. The poor mixing of either previous run is fixed by using the option
+A look at the file {\tt run1.concordance} shows that the clades (19,20) and
+(18,20) both have an estimated {\sc cf} of 0.50 but that this estimate differed
+greatly between runs because its standard deviation is 0.707. Scrolling down
+the file indicates that the first run gave a 100\% concordance factor to clade
+(18,20) all the time while the second run gave it a 0\% concordance factor 
+all the time.
+So the two runs are in very strong disagreement. 
+This poor mixing is fixed by using the option
 \verb+--use-update-groups+ (or by not using the 
 \verb+--do-not-use-update-groups+ option!).
 \medskip
 
 The yeast data analyzed in \cite{ane-etal-2007} is provided with the program
 and organized as follows. The directory
-\verb+$BUCKY_HOME/BUCKy-1.2/data/yeast/+ %$ 
+\verb+$BUCKY_HOME/bucky/data/yeast/+ %$ 
 contains 106 folders named {\tt y000} to {\tt y105}, one for each gene. 
 In each of these folders, a file created by {\tt mbsum} and named 
 {\tt run2.nex.in} contains the data from one gene.
 For analyzing these data with $\alpha=2.5$, 
-$n=1,000,000$ updates, $c=4$ chains (one cold and 3 hot chains),
+$n=1,000,000$ updates, $k=4$ independent runs, $c=4$ chains (one cold and 3 hot chains),
 saving samples once every 1000 updates, and for keeping a similarity 
 matrix among genes, one would type (on a single line)
 \begin{verbatim}
-bucky -a 2.5 -n 1000000 -c 4 --create-sample-file --calculate-pairs
-                           $BUCKY_HOME/BUCKy-1.2/data/yeast/y???/run2.nex.in
+bucky -a 2.5 -n 1000000 -k 4 -c 4 --create-sample-file --calculate-pairs
+                           $BUCKY_HOME/bucky/data/yeast/y???/run2.nex.in
 \end{verbatim}%$
     
 \section{Version history}
@@ -461,8 +471,15 @@ Output file named {\tt .genepost} in version 1.1 is now named
 Output files {\tt .joint} and {\tt .single} are not produced unless
 requested by the user.
 
+\paragraph{Changes to version 1.2.}
+Independent runs are implemented, with information on the standard deviation
+of clade's {\sc cf} across runs. A bug was fixed with the group update.
+
 
 \section{General notes}
+
+There is a limit to 32 taxa.
+
 \paragraph{Choosing the {\it a priori} level of discordance $\alpha$.}
 To select a value based on biological relevance, the number of taxa and 
 number of genes need to be considered. For example, the user might have an 
