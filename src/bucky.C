@@ -1239,13 +1239,21 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
 
   // ctree is the vector of splits in the primary concordance tree
   // gwDistr is the vector of GenomewideDistribution for splits in the primary concordance tree
-  vector<GenomewideDistribution*> gwDistr;
   vector<Split> ctree;
+  vector<GenomewideDistribution*> gwDistr;
+  // otherClade is the vector of splits with CF>.10 but not in the concordance tree
+  // otherGwDistr is the vector of GenomewideDistribution for those splits
+  vector<Split> otherClade;
+  vector<GenomewideDistribution*> otherGwDistr;
+
   for(int w=0;w<splits.size();w++) {
     int i = sw[w].getIndex();
     Split s(splits[i],numTaxa);
     s.setWeight(sw[w].getWeight());
     unsigned int y = s.getClade();
+    bool keep=true;
+    if (sw[w].getWeight() < .10)  // arbitrary cutoff here.
+      keep=false;
     bool add=true;
     for(int j=0;j<ctree.size();j++) {
       unsigned int z = ctree[j].getClade();
@@ -1254,10 +1262,12 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
 	break;
       }
     }
-    // fixit: make a vector splitsNotInCtree of splits with CF > .10
-    if(add){
+    if(add or keep){
       s.updatePriorProbability();
-      ctree.push_back(s);
+      if (add)
+	ctree.push_back(s);
+      else
+	otherClade.push_back(s);
       GenomewideDistribution* g;
       g = new GenomewideDistribution(numGenes, rp.getNumGenomewideGrid());
       g->updatePriorProbability(s);
@@ -1279,12 +1289,17 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
 	meanpostCFsd = sqrt(meanpostCFsd / (rp.getNumRuns()-1));  // number of genes
 	g->setSamplewidePosteriorMeanSD(meanpostCFsd / numGenes); // proportion of genes
       }
-      gwDistr.push_back(g);
+      if (add)
+	gwDistr.push_back(g);
+      else
+	otherGwDistr.push_back(g);
     }
   }
 
   // Now, use ctree to actually build the tree
   // Begin by creating a TaxonSet for each split and then partially ordering them so that subsets precede supersets
+
+  double AvgOfSDacrossSplits = 0.0;
 
   vector<TaxonSet> tset;
   for(vector<Split>::iterator p=ctree.begin();p!=ctree.end();p++)
@@ -1315,11 +1330,29 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
     gwDistr[w]->printSampleCF(concordanceStr);
     if (!mp.getUseIndependencePrior())
       gwDistr[w]->printGenomeCF(concordanceStr);
-    if (rp.getNumRuns()>1)
+    if (rp.getNumRuns()>1){
       concordanceStr << "\t" << gwDistr[w]->getSamplewidePosteriorMeanSD();
+      AvgOfSDacrossSplits += gwDistr[w]->getSamplewidePosteriorMeanSD();
+    }
     concordanceStr << endl;
   }
   concordanceStr << endl;
+  concordanceStr << "Splits NOT in the Primary Concordance Tree but with estimated CF>.10:"<<endl;
+  for(int w=0;w<otherClade.size();w++) {
+    otherClade[w].print(concordanceStr); 
+    otherGwDistr[w]->printSampleCF(concordanceStr);
+    if (!mp.getUseIndependencePrior())
+      otherGwDistr[w]->printGenomeCF(concordanceStr);
+    if (rp.getNumRuns()>1){
+      concordanceStr << "\t" << otherGwDistr[w]->getSamplewidePosteriorMeanSD();
+      AvgOfSDacrossSplits += otherGwDistr[w]->getSamplewidePosteriorMeanSD();
+    }
+    concordanceStr << endl;
+  }
+  concordanceStr << endl;
+
+  AvgOfSDacrossSplits /= (gwDistr.size()+otherGwDistr.size());
+  concordanceStr<<"Average SD of mean sample-wide CF: " << AvgOfSDacrossSplits<<endl<<endl;
 
   concordanceStr << "All Splits:" << endl;
 
@@ -1377,6 +1410,9 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
   concordanceStr.close();
   cout << "done." << endl;    
   fout << "done." << endl;    
+
+  cout << "Average SD of mean sample-wide CF: " << AvgOfSDacrossSplits<<endl;
+  fout << "Average SD of mean sample-wide CF: " << AvgOfSDacrossSplits<<endl;
 
   // .pairs
   if(rp.getCalculatePairs()) {
@@ -1713,7 +1749,7 @@ int main(int argc, char *argv[])
       mcmcmcAccepts[irun][i] = mcmcmcProposals[irun][i] = 0;
   }
 
-  vector<vector<int> > pairCounts(numGenes); // not adapted to several runs. Runs will be pooled. fixit?
+  vector<vector<int> > pairCounts(numGenes); // not adapted to several runs. Runs will be pooled.
   for(int i=0;i<numGenes;i++) {
     pairCounts[i].resize(numGenes);
     for(int j=0;j<numGenes;j++)
@@ -1763,7 +1799,7 @@ int main(int argc, char *argv[])
       clusterCount[irun][i] = 0;
   }
 
-  vector<vector<int> > newTable(numTrees); // fixit: not adapted to several runs. Should it be?
+  vector<vector<int> > newTable(numTrees); // not adapted to several runs.
   for(int i=0;i<numTrees;i++) {
     newTable[i].resize(numGenes);
     for(int j=0;j<numGenes;j++)
