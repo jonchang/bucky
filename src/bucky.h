@@ -409,8 +409,7 @@ public:
   }
   void print(ostream&);
   void updateSplits(vector<vector<int> >&,vector<vector<int> >&);
-  void updateOneGroup(int,Rand&);
-  //  void updateOneGroupNew(int,Rand&);
+  int updateOneGroup(int,Rand&);
   void updatePairCounts(vector<vector<int> >&);
  private:
   double alpha,logAlpha,alphaOverTop;

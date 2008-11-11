@@ -316,20 +316,21 @@ void State::updateOneGroup(int group,Rand& rand) {
 *******************************************************************************/
 
 // New, faster update group algorithm
-void State::updateOneGroup(int gene,Rand& rand) {
+int State::updateOneGroup(int gene,Rand& rand) {
   // pick a random topology for the gene
   // check that it:
   //  (1) is not a topology for another group
   //  (2) has positive single gene prior for all genes in the group
+  // return 1 if change accepted, 0 otherwise.
 
   int oldTop = tops[gene];
   int newTop = genes[gene]->pickTreeFast(rand);
   if(newTop==oldTop)
-    return;
+    return 0;
 
   // check if newTop is already in use
   if(counts[newTop]>0)
-    return;
+    return 0;
 
   // possible new topology for group
   vector<int> set(counts[oldTop]); // indices of genes with oldTop
@@ -338,13 +339,13 @@ void State::updateOneGroup(int gene,Rand& rand) {
   double newLogProb = 0.0;
   for(int i=0;i<genes.size();i++) {
     if(tops[i] == oldTop) {
-      oldLogProb += genes[i]->getProb(oldTop);
+      oldLogProb += log( genes[i]->getProb(oldTop) );
       set[j++] = i;
       double p = genes[i]->getProb(newTop);
 	  if(p>0)
 	    newLogProb += log(p);
 	  else // acceptance probability is 0
-	    return;
+	    return 0;
     }
   }
 
@@ -360,7 +361,10 @@ void State::updateOneGroup(int gene,Rand& rand) {
     indices.erase(indices.begin()+j,indices.begin()+j+1);
     indices.push_back(newTop);
     sort(indices.begin(),indices.end());
+    return 1;
   }
+  else
+    return 0;
 }
 
 int State::update(Rand& rand) {
@@ -1814,8 +1818,8 @@ int main(int argc, char *argv[])
       for(int i=0;i<rp.getNumChains();i++) {
 	accept[irun][index[irun][i]] += states[irun][i]->update(rand);
 	if(rp.getUseUpdateGroups()) {
-	  int group = (int)(rand.runif()*states[irun][i]->getNumGroups());
-	  states[irun][i]->updateOneGroup(group,rand);
+	  int gene = (int)(rand.runif()*genes.size());
+	  accept[irun][index[irun][i]] += states[irun][i]->updateOneGroup(gene,rand);
 	}
       }
       if(cycle % rp.getMCMCMCRate() == 0 && rp.getNumChains()>1)
