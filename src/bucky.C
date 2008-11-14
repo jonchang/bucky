@@ -1256,7 +1256,7 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
     s.setWeight(sw[w].getWeight());
     unsigned int y = s.getClade();
     bool keep=true;
-    if (sw[w].getWeight() < .10)  // arbitrary cutoff here.
+    if (sw[w].getWeight() < .05 * numGenes) // arbitrary cutoff: keep if sample wide CF >= .05
       keep=false;
     bool add=true;
     for(int j=0;j<ctree.size();j++) {
