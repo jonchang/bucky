@@ -198,9 +198,11 @@ bool cmpPickNodes(PickNode* x,PickNode* y) { return( x->getTotal() > y->getTotal
 
 class Gene {
 public:
-  Gene(int n,vector<double> x) {
+  Gene(int n, vector<double> x, vector<int> taxid) {
     probs.resize(x.size(),0);
     number = n;
+    for (int i=0; i<taxid.size(); i++)
+      taxonID.push_back(taxid[i]);
     numTrees = 0;
     total = 0.0;
     for(int i=0;i<x.size();i++)
@@ -243,12 +245,14 @@ public:
     counts.clear();
     pnodes.clear();
     probs.clear();
+    taxonID.clear();
   }
   int getNumber() const { return number; }
   int getNumTrees() const { return numTrees; }
   double getTotal() const { return total; }
   int getIndex(int i) const { return indices[i]; }
   double getCount(int i) const { return counts[i]; }
+  int getNumberTaxa() const { return taxonID.size(); }
   int pickTree(Rand& r) const {
     double x = total * r.runif();
     int i=0;
@@ -296,6 +300,17 @@ public:
 	<< setw(10) << setprecision(6) << (double) newTable[indices[i]][number] / (double) numCycles << endl;
     f << endl;
   }
+  void printTaxa(ostream& f, vector<string> taxonTable){
+    f << "\nGene " << number << ": " << taxonID.size() << " taxa" << endl;
+    for (int i=0; i<taxonID.size(); i++){
+      if (taxonID[i] <= taxonTable.size())
+	f << setw(4) << i+1 << setw(4) << taxonID[i] <<" "<< taxonTable[taxonID[i]-1] << endl;
+      else{
+	cerr << "taxonID ("<<taxonID[i]<<") too large for gene " << number << endl;
+	break;
+      }
+    }
+  }
 private:
   int number;
   int numTrees;
@@ -304,6 +319,7 @@ private:
   vector<double> counts;    // length is the number of topologies with positive probability
   vector<double> probs;     // length is the number of trees in the whole data set
                             // added to make the retrieval of probability information very fast (at the cost of space)
+  vector<int> taxonID;      // taxon IDs in the overall translate table
   PickNode* root;
   list<PickNode*> pnodes;   // length is the number of topologies with positive probability
 };

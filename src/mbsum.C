@@ -610,6 +610,7 @@ int main(int argc, char *argv[])
     int skipInFile = numSkip;
     while(getline(f,line)) {
       lineNumber++;
+      // fixit: copy the translate table if there is one
       // skip if line is not in format "  tree name = treeRep"
       istringstream s(line);
       string keyTree,name,equalSign;
