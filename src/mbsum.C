@@ -593,6 +593,12 @@ int main(int argc, char *argv[])
       outFile = "bucky.in";
   }
 
+  ofstream sumOut(outFile.c_str());
+  if(sumOut.fail()){
+    cerr << "Error: Could not open file " << outFile << " ." << endl;
+    exit(1);
+  }
+
   int numFiles = fileNames.size();
   vector<int> numTrees(numFiles,0);
   vector<int> numTaxa(numFiles,0);
@@ -604,19 +610,57 @@ int main(int argc, char *argv[])
     else
       cout << "Reading file " << fileNames[i] << ": " << flush;
 
+
+
     string line;
     int lineNumber=0;
     int numActuallySkipped=0;
     int skipInFile = numSkip;
+    bool readTtable = false;
     while(getline(f,line)) {
       lineNumber++;
-      // fixit: copy the translate table if there is one
-      // skip if line is not in format "  tree name = treeRep"
       istringstream s(line);
       string keyTree,name,equalSign;
+
+      if (readTtable){
+	char ch;
+	s >> noskipws >> ch;
+	while (ch != ';' && ch != EOF && s.good()) {
+	  sumOut << ch;
+	  s >> noskipws >> ch;
+	}
+	if (ch == ';'){
+	  sumOut << ";\n";
+	  readTtable = false;
+	} else {
+	  sumOut << "\n";
+	  continue;
+	}
+      }
+
       s >> keyTree;
+      if (keyTree=="translate" || keyTree=="TRANSLATE" || keyTree=="Translate"){
+	readTtable = true;
+	sumOut << "translate";
+	char ch;
+	s >> noskipws >> ch;
+	while (ch != ';' && ch != EOF && s.good()) {
+	  sumOut << ch;
+	  s >> noskipws >> ch;
+	}
+	if (ch == ';'){
+	  sumOut << ";\n";
+	  readTtable = false;
+	} else {
+	  sumOut << "\n";
+	  continue;
+	}
+      }
+
+      // skip if the remaining line is not in format "  tree name = treeRep"
       if(keyTree != "tree")
 	continue;
+
       s >> name >> equalSign;
       if(equalSign != "=")
 	continue;
@@ -648,7 +692,6 @@ int main(int argc, char *argv[])
   root->collect(cnodes);
   sort(cnodes.begin(),cnodes.end(),cmpTCNodes);
 
-  ofstream sumOut(outFile.c_str());
   for(vector<TopCountNode*>::iterator n=cnodes.begin();n!=cnodes.end();n++)
     (*n)->print(sumOut);
 
