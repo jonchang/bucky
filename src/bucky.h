@@ -1310,5 +1310,91 @@ void GenomewideDistribution::printGenomeCF(ostream& f){
     <<"("<<genomewideCredibilityInterval[1]<<","<<genomewideCredibilityInterval[4]<<")";
 }
 
+
+class TaxonList {
+ public:
+  TaxonList(vector<string>& tTable){
+    Nall = tTable.size();
+    for (int i=0; i<Nall; i++)
+      name.push_back(tTable[i]);
+    alleleOf.resize(Nall); // for now only one allele allowed.
+    Ntax = Nall;
+    isMissingOne.resize(Ntax);
+    numberGenes.resize(Ntax);
+  }
+  ~TaxonList(){
+    name.clear();
+    isMissingOne.clear();
+    include.clear();
+    numberGenes.clear();
+    alleleOf.clear();
+  }
+  void setNumberGenes(vector<vector<int> >& taxid){
+    for (int j=0; j<Ntax; j++)
+      numberGenes[j]=0;
+    for (int i=0; i<taxid.size(); i++){
+      for (int j=0; j<taxid[i].size(); j++){
+	if (taxid[i][j]-1<numberGenes.size())
+	  numberGenes[taxid[i][j]-1]++;
+	else
+	  cerr << "Warning: taxon ID ("<<taxid[i][j]
+	       <<") exceeded the expected max Taxon number."<<endl;   
+      }
+    }
+    for (int j=0; j<Ntax; j++)
+      if (numberGenes[j]<taxid.size())
+	isMissingOne[j]=true;
+      else 
+	isMissingOne[j]=false;
+  }
+  vector<vector<bool> > getAvailabilityMatrix(vector<vector<int> >& taxid); //fixit: for later may be
+  vector<int> getNonMissing(){
+    vector<int> mytax;
+    for (int j=0; j<Ntax; j++)
+      if (!isMissingOne[j])
+	mytax.push_back(j+1);
+    return mytax;
+  }
+  void setInclude(vector<int>& taxid){
+    for (int i=0; i<Ntax; i++)
+      include.push_back(false);
+    for (int i=0; i<taxid.size(); i++){
+      if (taxid[i]-1<include.size())
+	include[taxid[i]-1]=true;
+      else
+	cerr << "Warning: taxon ID ("<<taxid[i]
+	     <<") exceeded the expected max Taxon number ("
+	     <<include.size()<<")"<<endl;
+    }
+  }
+  void print(ostream& f){
+    //f << "All taxa:"<< endl;
+    f << "\ntranslate" << endl;
+    for (int i=0; i<Ntax; i++)
+      f << setw(4) << i+1 << " "<<name[i]<< (i<(Ntax-1)?",":";") <<endl;
+    f << "Taxa with missing data:"<< endl;
+    for (int i=0; i<Ntax; i++)
+      if (isMissingOne[i])
+	f << setw(4) << i+1 <<endl;
+    f << "Number of genes sequenced for each taxon:"<<endl;
+    for (int i=0; i<Ntax; i++)
+      f << setw(4) << i+1 << " "<<name[i]<<" "<< setw(6)<<numberGenes[i]<<endl;
+    f << "Taxa included in the analysis:\n";
+    for (int i=0; i<Ntax; i++)
+      if (include[i])
+	f << setw(4) << i+1 <<endl;
+  }
+ private:
+  int Ntax;             // total number of individuals
+  int Nall;             // total number of sequences/alleles
+  vector<string> name;  // taxon or allele names
+  vector<bool> isMissingOne; // is the taxon missing for at least one gene?
+  vector<bool> include;      // should the taxon be included in the analysis?
+  vector<int> numberGenes;   // how many genes have a sequence for this taxon?
+  vector<int> alleleOf;      // if not an allele: 0. Otherwise: ID of the individual 
+};
+
+
+
 #endif
 

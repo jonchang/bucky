@@ -1658,12 +1658,6 @@ int main(int argc, char *argv[])
     cout << "Warning: at least one locus has no 'translate' block." << endl;
     fout << "Warning: at least one locus has no 'translate' block." << endl;
   }
-  cout << "\nOverall translate table:" << endl;
-  fout << "\nOverall translate table:" << endl;
-  for (int i=0; i<translateTable.size(); i++){
-    cout << setw(4) << i+1 << " "<< translateTable[i] << endl;
-    fout << setw(4) << i+1 << " "<< translateTable[i] << endl;
-  }
 
   // Check for missing taxa.
   for(int i=0; i<inputFiles.size(); i++) {
@@ -1688,6 +1682,19 @@ int main(int argc, char *argv[])
       exit(1);
     }
   }
+
+  // Find taxa sequenced in all genes
+  TaxonList allTaxList(translateTable);
+  allTaxList.setNumberGenes(taxid);
+  vector<int> taxlist = allTaxList.getNonMissing();
+  allTaxList.setInclude(taxlist);
+  allTaxList.print(cout);
+  allTaxList.print(fout);
+  // fixit:
+  // prune the missing taxa from all topologies, which is a vector<string>
+  // find the unique topologies
+  // collapse the table to only unique topologies, with updated counts
+  // ??update the translate table and the taxid vectors??
 
   if(numTaxa > 32) { // are you sure it works with exactly 32 taxa?
     cerr << "Error: BUCKy version " << VERSION << " only works with 32 or fewer taxa." << endl;
