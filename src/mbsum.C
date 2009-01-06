@@ -38,8 +38,6 @@
 
 #define VERSION "1.02b"
 
-using namespace std;
-
 #include <iostream>
 #include <iomanip>
 #include <fstream>
@@ -47,6 +45,9 @@ using namespace std;
 #include <sstream>
 #include <vector>
 #include <algorithm>
+#include <functional>
+
+using namespace std;
 
 class Node;
 
@@ -95,7 +96,7 @@ class Node {
   void reorder(Edge*);
   void rootReorder();
   int getMinTaxa() { return minTaxa; }
-  int setMinTaxa(int x) { minTaxa = x; }
+  int setMinTaxa(int x) { minTaxa = x; return x; }
   int setMinTaxa(Edge*);
   void setNumbers(int&,Edge*);
   void printTop(ostream&,Edge*);

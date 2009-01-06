@@ -1359,7 +1359,7 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
 	break;
       }
     }
-    if(add or keep){
+    if(add || keep){
       s.updatePriorProbability();
       if (add)
 	ctree.push_back(s);
@@ -1615,7 +1615,7 @@ int main(int argc, char *argv[])
   vector<string> inputFiles(argv + k, argv + argc);
 
   // If input list filename is given as argument, read input filenames
-  if (not fileNames.getInputListFileName().empty()) {
+  if (!(fileNames.getInputListFileName().empty())) {
     readInputFileList(fileNames.getInputListFileName(), inputFiles);
   }
 
