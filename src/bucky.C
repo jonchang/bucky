@@ -1,4 +1,4 @@
-// BUCKy 1.2 - Bayesian Untangling of Concordance Knots (applied to yeast and other organisms)
+// BUCKy 1.3 - Bayesian Untangling of Concordance Knots (applied to yeast and other organisms)
 // Copyright (C) 2006-2007 by Bret Larget and Cecile Ane
 
 // This program is free software; you can redistribute it and/or modify
@@ -18,6 +18,7 @@
 // Version 1.1 released 30 October, 2006
 // Version 1.2a 21 August, 2007
 // Version 1.2b 17 January, 2008
+// Version 1.3a  6 January, 2009
 
 // File:     bucky.C
 
@@ -76,6 +77,12 @@
 // --- Fixed error in updatePairCounts, count at the bottom-right
 // --- Fixed uninitialized default values for createXxxFile, fixed error in setFileNames
 
+// Changes in version 1.3a
+// --- Use git repository: use git commands to get more details on previous versions.
+// --- Added independent runs are diagnostic summaries to check convergence. 
+// --- Fixed bug in the group update.
+// --- Translate tables are read and used to check all taxa are the same.
+
 #include <iostream>
 #include <iomanip>
 #include <string>
@@ -89,8 +96,8 @@
 #include "bucky.h"
 
 using namespace std;
-string VERSION = "1.2";
-string DATE = "17 January 2008";
+string VERSION = "1.3a";
+string DATE = "6 January 2009";
 string COPYRIGHT = "Copyright (C) 2006-2008 by Bret Larget and Cecile Ane";
 
 //

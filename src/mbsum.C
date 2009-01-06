@@ -12,7 +12,9 @@
 // distribution or http://www.gnu.org/licenses/gpl.txt) for more
 // details.
 
-// Last modified: July 25, 2007
+// version 1.2b: multiple files from the same gene can be combined.
+// version 1.3a: Translate table, if present, are copied verbatim from
+//              the first file, assumed the same in other files.
 
 // mbsum.C
 
@@ -36,7 +38,7 @@
 //
 // Usage:    mbsum [--help || -h] [<--skip || -n> number-of-skipped-trees] [<--out || -o> output-file] [--version] [input filename(s)]
 
-#define VERSION "1.02b"
+#define VERSION "1.3a"
 
 #include <iostream>
 #include <iomanip>
@@ -640,21 +642,24 @@ int main(int argc, char *argv[])
       }
 
       s >> keyTree;
-      if (keyTree=="translate" || keyTree=="TRANSLATE" || keyTree=="Translate"){
-	readTtable = true;
-	sumOut << "translate";
-	char ch;
-	s >> noskipws >> ch;
-	while (ch != ';' && ch != EOF && s.good()) {
-	  sumOut << ch;
+      if (i==0){
+	// read translate table only in the first file, assuming the same in other files.
+	if (keyTree=="translate" || keyTree=="TRANSLATE" || keyTree=="Translate"){
+	  readTtable = true;
+	  sumOut << "translate";
+	  char ch;
 	  s >> noskipws >> ch;
-	}
-	if (ch == ';'){
-	  sumOut << ";\n";
-	  readTtable = false;
-	} else {
-	  sumOut << "\n";
-	  continue;
+	  while (ch != ';' && ch != EOF && s.good()) {
+	    sumOut << ch;
+	    s >> noskipws >> ch;
+	  }
+	  if (ch == ';'){
+	    sumOut << ";\n";
+	    readTtable = false;
+	  } else {
+	    sumOut << "\n";
+	    continue;
+	  }
 	}
       }
 
