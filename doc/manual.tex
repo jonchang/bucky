@@ -40,9 +40,9 @@
 (applied to yeast and other organisms)}
 \bigskip
 
-Version 1.2, 17 January 2008\\
+Version 1.3, 6 January 2009\\
 Copyright\copyright{} 2008 by Bret Larget\\
-Last updated: 11 November 2008
+Last updated: 7 January 2009
 \medskip
 
 {\small
@@ -74,20 +74,17 @@ from the analysis of an individual locus. The latter, {\tt bucky},
 takes the summaries produced by {\tt mbsum} and performs the second step
 of BCA. These two programs were kept separate because {\tt mbsum}
 is typically run just once, while {\tt bucky} might be run several
-times  independently, with or without the same parameters.
+times  independently, with or without the same parameters, with
+a subset of taxa or a subset of genes, etc.
 
 \section{Installation and Compilation}
 \bu{} is a command-line controlled program written is C$++$.
-It should be easily compiled and run on any Linux system or Mac OSX. 
-
-\paragraph{Installation (Mac OSX 10.4 users).}
-Since Mac OSX 10.4 does not come with a C$++$ compiler, we can provide 
-an executable file that compiled with OSX 10.4, upon request. 
-%However, there is no waranty blah blah. Dowload the {\tt bucky} file(s)
-%and put it in ... FIXIT.
+It should be easily compiled and run on any Linux system or Mac OSX.
+Executable files compiled under various platforms are available
+at \verb+www.stat.wisc.edu/~ane/bucky/+ .
 
 
-\paragraph{Installation (Linux or Mac OSX, version 10.3.9 or below).}
+\paragraph{Installation from source code.}
 Pick a directory where you want the \bu{} code to be. This directory 
 will be called \verb+$BUCKY_HOME+ in this documentation.
 Download the {\tt bucky-1.2.tgz} file and put it in \verb+$BUCKY_HOME+.
@@ -109,11 +106,10 @@ make
 This will compile programs {\tt mbsum} and {\tt bucky}.
 It is suggested that copies of {\tt mbsum} and {\tt bucky}
 be put in \verb+~/bin+ if this directory is in your path.
-
 If you do not have gcc installed and the executable provided
 is not working on your system, you need to find the installer
 for gcc. On a Macintosh (version 10.3.9 or before), it may be in 
-Applications/Installers/Developer~Tools .
+Applications/Installers/Developer~Tools.
 
 \section{Running mbsum}
 Type this for a brief help message
@@ -134,7 +130,16 @@ just means input (for later analysis by {\tt bucky}).
 Output files {\tt *.in} from {\tt mbsum} will typically look like the following,
 containing a list of tree topologies and a tally representing the trees' posterior
 probabilities from a given locus (as obtained in the first step of BCA).
-\begin{verbatim}
+{\small\begin{verbatim}
+translate
+       1 Scer,
+       2 Spar,
+       3 Smik,
+       4 Skud,
+       5 Sbay,
+       6 Scas,
+       7 Sklu,
+       8 Calb;
 (1,(2,(3,(4,(5,((6,7),8)))))); 24239
 (1,(2,(3,(4,(5,(6,(7,8))))))); 15000
 (1,(2,(3,(4,(5,((6,8),7)))))); 2983
@@ -150,7 +155,7 @@ probabilities from a given locus (as obtained in the first step of BCA).
 (1,(2,((3,(4,5)),(6,(7,8))))); 22
 (1,(2,(3,((4,((6,8),7)),5)))); 15
 (1,(2,((3,(4,5)),((6,8),7)))); 1
-\end{verbatim}
+\end{verbatim}}
  
 \paragraph{Syntax and Options.}
 To run {\tt mbsum} for a single data file, type:
@@ -211,28 +216,25 @@ They can be summarized with:
 mbsum -n 501 -o y000.in    $BUCKY_HOME/bucky/data/yeast/y000/y000.run?.t
 \end{verbatim}
 
-\paragraph{Warnings.}  
+\paragraph{Warning.}  
 {\tt mbsum} will overwrite a file named \verb+filename+
 if such a file exists.
-Most importantly, \texttt{mbsum} assumes that the same 
-translation table applies to all files, i.e. that taxon 1
-is the same taxon across all genes, and taxon 2 is the same
-taxon across all genes, etc. This is okay as long as taxa
-appear in the same order in all alignment files. But if not, 
-BCA would be screwed up with no warning
-\citep{ane-etal-2008}.
-The best way to avoid such a problem is to have all the 
-alignments in a single nexus file. In the first step (single
-locus) analysis, MrBayes can be told to ignore all but 
-a single locus, and this would be repeated for each locus.
-\com{This shortcoming will be fixed in a later version of \texttt{mbsum}.}
+From version 1.3, \texttt{mbsum} and \texttt{bucky} use translate tables,
+so that taxa may appear in a different order for different genes.
 
 \section{Running bucky}
 %\paragraph{Syntax.}
-To run {\tt bucky}, type
+After input files created by {\tt mbsum} are ready, the names of these
+files can either be given as arguments to {\tt bucky}, or the file 
+names can be written into a file, which in turn can be given to
+{\tt bucky}. To run {\tt bucky}, use either way:
 \begin{verbatim}
 bucky [-options] <summary_files> 
+bucky [-options]
 \end{verbatim}
+With the second command, one of the options must be 
+{\tt -i filename}, where {\tt filename} is the name of a file
+containing the list of all the input files (one input file per gene).
 For example, after creating all {\tt .in} files with {\tt mbsum} in the same 
 directory, you can run bucky with the default parameters by typing this:
 \begin{verbatim}
@@ -246,6 +248,8 @@ bucky *.in
 \noindent
 \hspace*{-.2in}
 \begin{tabular}{l|p{4.6in}}
+{\tt -i inputfilelist-file}&To give the list of files created by {\tt mbsum} 
+from a file.\\
 {\tt -o output-file-root}&This option sets the names of output 
 files. Default is {\tt run1}.\\
 {\tt -a alpha}&$\alpha$ is the {\it a priori} level of discordance among 
@@ -388,7 +392,7 @@ the log-posterior probability of the gene-to-tree map
 up to an additive constant
 \com{fixit: NOT sure at all. Bret: please check!}
 followed by the gene-to-tree map. If there are $l$ loci, this map is just 
-a list of $l$ trees. Trees are given by their indices. The correspondance
+a list of $l$ trees. Trees are given by their indices. The correspondence
 between tree index and tree parenthetical description can be found in the
 {\tt .gene} or {\tt .single} file.\\
 %\end{tabular}
@@ -408,8 +412,9 @@ The example data provided with the program is organized as follows:
 directory\\ \verb+$BUCKY_HOME/bucky/data/example1/+ %$
 contains 10 folders named {\tt ex0} to {\tt ex9}, one for each locus. 
 These 10 folders contain a single file each, named {\tt ex.in}, which was 
-created by  {\tt mbsum}. For analyzing these data, one
-can use the default parameters and type
+created by  {\tt mbsum}.
+is also provided in For analyzing these data, one
+can use the default parameters and type either
 \begin{verbatim}
 bucky $BUCKY_HOME/bucky/data/example1/ex?/ex.in
 \end{verbatim}%$
@@ -442,14 +447,61 @@ and organized as follows. The directory
 contains 106 folders named {\tt y000} to {\tt y105}, one for each gene. 
 In each of these folders, a file created by {\tt mbsum} and named 
 {\tt run2.nex.in} contains the data from one gene.
+The list of all these input files is also provided, in 
+\verb+$BUCKY_HOME/bucky/data/yeast/yeast_inputfilelist+ .
 For analyzing these data with $\alpha=2.5$, 
-$n=1,000,000$ updates, $k=4$ independent runs, $c=4$ chains (one cold and 3 hot chains),
-saving samples once every 1000 updates, and for keeping a similarity 
+$n=150,000$ updates, $k=4$ independent runs, $c=4$ chains 
+(one cold and 3 hot chains),
+saving samples once every $1000$ updates, and for keeping a similarity 
 matrix among genes, one would type (on a single line)
 \begin{verbatim}
-bucky -a 2.5 -n 1000000 -k 4 -c 4 --create-sample-file --calculate-pairs
-                           $BUCKY_HOME/bucky/data/yeast/y???/run2.nex.in
+bucky -a 2.5 -n 150000 -k 4 -c 4 --create-sample-file --calculate-pairs
+                -s 1000   $BUCKY_HOME/bucky/data/yeast/y???/run2.nex.in
 \end{verbatim}%$
+or alternatively, if \verb+$BUCKY_HOME/bucky/+ is the current directory:%$
+\begin{verbatim}
+bucky -a 2.5 -n 150000 -k 4 -c 4 --create-sample-file --calculate-pairs
+                -s 1000 -i data/yeast/yeast_inputfilelist
+\end{verbatim}
+
+\section{General notes}
+
+There is a limit to 32 taxa (or 31?).
+
+\paragraph{First step of BCA: Analysis of individual loci in MrBayes.}
+Any model of sequence evolution can be selected for any locus: there need 
+not be one model common to all loci. Some loci can be protein alignments,
+others DNA alignments, some can combine DNA and coded gap characters.
+Morphological characters could technically be included as one locus, 
+but then the resulting concordance factors may not have an
+easy interpretation.
+
+If hundreds of genes are to be analyzed, the analysis of these
+genes needs to be automated. One way to proceed is to have 
+all the alignments in a single nexus file. In the first step, MrBayes 
+can be told to ignore all but a single locus, and this would be repeated 
+for each locus.
+
+\paragraph{Choosing the {\it a priori} level of discordance $\alpha$.}
+To select a value based on biological relevance, the number of taxa and 
+number of genes need to be considered. For example, the user might have an 
+{\it a priori} for the proportion of loci sharing the same genealogy. One 
+can turn this information into a value of $\alpha$ since the probability that 
+two randomly chosen loci share the same tree is about $1/(1+\alpha)$ if 
+$\alpha$ is small compared to the total number of possible tree topologies. 
+Also, the value of $\alpha$ sets the prior distribution on the number of 
+distinct locus genealogies in the sample. 
+Go to the website \verb+www.stat.wisc.edu/~larget/bucky.html+ 
+for an interactive display of this distribution, which can
+serve as a tool for the choice of $\alpha$. 
+
+
+\paragraph{Missing sequences.}
+If some loci have missing sequences, i.e. missing taxa, then
+rows of missing data (????) need to be inserted in place of the missing 
+taxon's sequence. A more efficient way to deal with missing 
+sequences will be implemented in a future version of {\tt bucky}.
+
     
 \section{Version history}
 \paragraph{Changes to version 1.1.}
@@ -474,35 +526,15 @@ requested by the user.
 \paragraph{Changes to version 1.2.}
 Independent runs are implemented, with information on the standard deviation
 of clade's {\sc cf} across runs. A bug was fixed with the group update.
+The {\tt -i} option was added, which can be particularly useful when
+thousands of genes are to be analyzed. Translate tables are used: {\tt mbsum}
+uses the translate information only from the first run of MrBayes,
+in case several runs are to be combined for a given gene. It assumes
+that the same taxa appear in the same order in all the separate runs.
+In the second step, {\tt bucky} uses the translate information if provided 
+by the files created by {\tt mbsum}, and makes the necessary checks and
+warnings.
 
-
-\section{General notes}
-
-There is a limit to 32 taxa.
-
-\paragraph{Choosing the {\it a priori} level of discordance $\alpha$.}
-To select a value based on biological relevance, the number of taxa and 
-number of genes need to be considered. For example, the user might have an 
-{\it a priori} for the proportion of loci sharing the same genealogy. One 
-can turn this information into a value of $\alpha$ since the probability that 
-two randomly chosen loci share the same tree is about $1/(1+\alpha)$ if 
-$\alpha$ is small compared to the total number of possible tree topologies. 
-Also, the value of $\alpha$ sets the prior distribution on the number of 
-distinct locus genealogies in the sample. 
-Go to the website \verb+www.stat.wisc.edu/~larget/bucky.html+ 
-for an interactive display of this distribution, which can
-serve as a tool for the choice of $\alpha$. 
-
-\paragraph{First step of BCA: individual locus analysis.}
-Any model of sequence evolution can be selected for any locus: there need 
-not be one model common to all loci. Some loci can be protein alignments,
-others DNA alignments, and other morphological characters.
-
-\paragraph{Missing sequences.}
-If some loci have missing sequences, i.e. missing taxa, then
-rows of missing data (????) need to be inserted in place of the missing 
-taxon's sequence. A more efficient way to deal with missing 
-sequences will be implemented in a future version of {\tt bucky}.
 
 \com{ Not needed anymore for the splits in the concordance tree. 
 \paragraph{Genome-wide concordance factors.}
