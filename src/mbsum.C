@@ -1,4 +1,4 @@
-// BUCKy 1.2a - Bayesian Untangling of Concordance Knots (applied to yeast and other organisms)
+// BUCKy - Bayesian Untangling of Concordance Knots (applied to yeast and other organisms)
 // Copyright (C) 2006 by Bret Larget
 
 // This program is free software; you can redistribute it and/or modify
@@ -13,7 +13,7 @@
 // details.
 
 // version 1.2b: multiple files from the same gene can be combined.
-// version 1.3a: Translate table, if present, are copied verbatim from
+// version 1.3.0: Translate table, if present, are copied verbatim from
 //              the first file, assumed the same in other files.
 
 // mbsum.C
@@ -38,7 +38,7 @@
 //
 // Usage:    mbsum [--help || -h] [<--skip || -n> number-of-skipped-trees] [<--out || -o> output-file] [--version] [input filename(s)]
 
-#define VERSION "1.3a"
+#define VERSION "1.3.0"
 
 #include <iostream>
 #include <iomanip>

@@ -18,7 +18,7 @@
 // Version 1.1 released 30 October, 2006
 // Version 1.2a 21 August, 2007
 // Version 1.2b 17 January, 2008
-// Version 1.3a  6 January, 2009
+// Version 1.3.0  6 January, 2009
 
 // File:     bucky.C
 
@@ -77,7 +77,7 @@
 // --- Fixed error in updatePairCounts, count at the bottom-right
 // --- Fixed uninitialized default values for createXxxFile, fixed error in setFileNames
 
-// Changes in version 1.3a
+// Changes in version 1.3.0
 // --- Use git repository: use git commands to get more details on previous versions.
 // --- Added independent runs are diagnostic summaries to check convergence. 
 // --- Fixed bug in the group update.
@@ -96,7 +96,7 @@
 #include "bucky.h"
 
 using namespace std;
-string VERSION = "1.3a";
+string VERSION = "1.3.0";
 string DATE = "6 January 2009";
 string COPYRIGHT = "Copyright (C) 2006-2008 by Bret Larget and Cecile Ane";
 
