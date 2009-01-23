@@ -1107,7 +1107,8 @@ public:
     createSampleFile(false),
     createJointFile(false),
     createSingleFile(false),
-    numGenomewideGrid(1000)
+    numGenomewideGrid(1000),
+    swCFcutoff(.05)
   {}
   double getAlphaMultiplier() { return alphaMultiplier; }
   void setAlphaMultiplier(double x) { alphaMultiplier = x; }
@@ -1137,8 +1138,10 @@ public:
   void setCreateJointFile(bool x) { createJointFile = x; }
   bool getCreateSingleFile() { return createSingleFile; }
   void setCreateSingleFile(bool x) { createSingleFile = x; }
+  double getSwCFcutoff() { return  swCFcutoff; }
+  void   setSwCFcutoff(double x) { swCFcutoff = x; }
 private:
-  double alphaMultiplier;
+  double alphaMultiplier,swCFcutoff;  // cutoff on sample-wide CF to display splits
   unsigned int seed1,seed2,numUpdates,subsampleRate,numRuns,numChains,mcmcmcRate,numGenomewideGrid;
   bool calculatePairs;
   bool useUpdateGroups;
@@ -1167,7 +1170,8 @@ public:
     createSampleFile(rp.getCreateSampleFile()),
     createJointFile(rp.getCreateJointFile()),
     createSingleFile(rp.getCreateSingleFile()),
-    numGenomewideGrid(rp.getNumGenomewideGrid())
+    numGenomewideGrid(rp.getNumGenomewideGrid()),
+    swCFcutoff(rp.getSwCFcutoff())
   {}
   void print(ostream&);
   double getAlpha() { return alpha; }
@@ -1188,12 +1192,13 @@ public:
   bool getCreateSampleFile() { return createSampleFile; }
   bool getCreateJointFile() { return createJointFile; }
   bool getCreateSingleFile() { return createSingleFile; }
+  double getSwCFcutoff() { return swCFcutoff; }
 private:
   double alpha;
   unsigned int numUpdates;
   unsigned int numChains, numRuns;
   unsigned int mcmcmcRate;
-  double alphaMultiplier;
+  double alphaMultiplier, swCFcutoff;
   unsigned int subsampleRate;
   string rootFileName;
   string inputListFileName;

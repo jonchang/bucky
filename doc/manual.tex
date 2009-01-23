@@ -290,6 +290,9 @@ will be saved every $s$ updates. This option will have an effect only if option
 \noindent
 \hspace*{-.3in}
 \begin{tabular}{l|p{4.4in}}
+{\tt -cf cutoff}&All splits with estimated sample-wide CF above this cutoff 
+will be included in the list to have their summary information and their genome-wide CF
+displayed.\\
 \verb+--calculate-pairs+&Use this option to calculate the 
 posterior probability that pairs of loci share the same tree. Default is 
 to {\sc not} use this option.\\
@@ -535,6 +538,8 @@ In the second step, {\tt bucky} uses the translate information if provided
 by the files created by {\tt mbsum}, and makes the necessary checks and
 warnings.
 
+\paragraph{Changes to version 1.3.0}
+Option {\tt -cf} was added.
 
 \com{ Not needed anymore for the splits in the concordance tree. 
 \paragraph{Genome-wide concordance factors.}

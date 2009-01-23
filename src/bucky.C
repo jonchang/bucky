@@ -730,6 +730,7 @@ void usage(Defaults defaults)
   cerr << "  input file list file   | -i filename                | " << defaults.getInputListFileName() << endl;
   cerr << "  random seed 1          | -s1 integer                | " << defaults.getSeed1() << endl;
   cerr << "  random seed 2          | -s2 integer                | " << defaults.getSeed2() << endl;
+  cerr << "  CF cutoff for display  | -cf number                 | " << defaults.getSwCFcutoff() << endl;
   cerr << "  create sample file     | --create-sample-file       | " << (defaults.getCreateSampleFile() == true ? "true" : "false") << endl;
   cerr << "  create joint file      | --create-joint-file        | " << (defaults.getCreateJointFile() == true ? "true" : "false") << endl;
   cerr << "  create single file     | --create-single-file       | " << (defaults.getCreateSingleFile() == true ? "true" : "false") << endl;
@@ -755,9 +756,10 @@ void showParameters(ostream& f,FileNames& fn,Defaults defaults,ModelParameters& 
   f << "  alpha multiplier       | -m number                | " << left << setw(14) << defaults.getAlphaMultiplier()                                   << "| " << rp.getAlphaMultiplier() << endl;
   f << "  subsample rate         | -s integer               | " << left << setw(14) << defaults.getSubsampleRate()                                     << "| " << rp.getSubsampleRate() << endl;
   f << "  output root file name  | -o name                  | " << left << setw(14) << defaults.getRootFileName()                                      << "| " << fn.getRootFileName() << endl;
-  f << "  input file list file   | -i filename              | " << left << setw(14) << defaults.getInputListFileName()                                      << "| " << fn.getInputListFileName() << endl;
+  f << "  input file list file   | -i filename              | " << left << setw(14) << defaults.getInputListFileName()                                 << "| " << fn.getInputListFileName() << endl;
   f << "  random seed 1          | -s1 integer              | " << left << setw(14) << defaults.getSeed1()                                             << "| " << rp.getSeed1() << endl;
   f << "  random seed 2          | -s2 integer              | " << left << setw(14) << defaults.getSeed2()                                             << "| " << rp.getSeed2() << endl;
+  f << "  CF cutoff for display  | -cf number               | " << left << setw(14) << defaults.getSwCFcutoff()                                        << "| " << rp.getSwCFcutoff() << endl;
   f << "  create sample file     | --create-sample-file     | " << left << setw(14) << (defaults.getCreateSampleFile() == true ? "true" : "false")     << "| " << (rp.getCreateSampleFile() ? "true" : "false") << endl;
   f << "  create joint file      | --create-joint-file      | " << left << setw(14) << (defaults.getCreateJointFile() == true ? "true" : "false")      << "| " << (rp.getCreateJointFile() ? "true" : "false") << endl;
   f << "  create single file     | --create-single-file     | " << left << setw(14) << (defaults.getCreateSingleFile() == true ? "true" : "false")     << "| " << (rp.getCreateSingleFile() ? "true" : "false") << endl;
@@ -906,6 +908,15 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
 	cerr << "Warning: parameter seed2 must be at least one. Ignorning command -s2 " << seed2 << "." << endl;
       else
 	rp.setSeed2(seed2);
+      k++;
+    }
+    else if(flag=="-cf") {
+      double cutoff;
+      string num = argv[++k];
+      istringstream f(num);
+      if( !(f >> cutoff) )
+	usage(defaults);
+      rp.setSwCFcutoff(cutoff);
       k++;
     }
     else if(flag=="--create-sample-file") {
@@ -1368,7 +1379,7 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
     s.setWeight(sw[w].getWeight());
     unsigned int y = s.getClade();
     bool keep=true;
-    if (sw[w].getWeight() < .05 * numGenes) // arbitrary cutoff: keep if sample wide CF >= .05
+    if (sw[w].getWeight() <= rp.getSwCFcutoff() * numGenes)
       keep=false;
     bool add=true;
     for(int j=0;j<ctree.size();j++) {
@@ -1453,7 +1464,8 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
     concordanceStr << endl;
   }
   concordanceStr << endl;
-  concordanceStr << "Splits NOT in the Primary Concordance Tree but with estimated CF>.10:"<<endl;
+  concordanceStr << "Splits NOT in the Primary Concordance Tree but with estimated CF > "
+		 << rp.getSwCFcutoff() <<":"<<endl;
   for(int w=0;w<otherClade.size();w++) {
     otherClade[w].print(concordanceStr); 
     otherGwDistr[w]->printSampleCF(concordanceStr);
