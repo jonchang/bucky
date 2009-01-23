@@ -1213,6 +1213,10 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
     cout << "Writing joint posterior table to file " << fileNames.getJointFile() << "...." << flush;
     fout << "Writing joint posterior table to file " << fileNames.getJointFile() << "...." << flush;
     ofstream jointStr(fileNames.getJointFile().c_str());
+    if(jointStr.fail()) {
+      cerr <<"Error: Cannot open file " << fileNames.getJointFile() << "." << endl;
+      fout <<"Error: Cannot open file " << fileNames.getJointFile() << "." << endl;
+    }
     jointStr.setf(ios::fixed, ios::floatfield);
     jointStr.setf(ios::showpoint);
     for(int i=0;i<numTrees;i++) {
@@ -1229,6 +1233,10 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
   cout << "Writing cluster summary to file " << fileNames.getClusterFile() << "...." << flush;
   fout << "Writing cluster summary to file " << fileNames.getClusterFile() << "...." << flush;
   ofstream clusterStr(fileNames.getClusterFile().c_str());
+  if(clusterStr.fail()) {
+    cerr <<"Error: Cannot open file " << fileNames.getClusterFile() << "." << endl;
+    fout <<"Error: Cannot open file " << fileNames.getClusterFile() << "." << endl;
+  }
   clusterStr.setf(ios::fixed, ios::floatfield);
   clusterStr.setf(ios::showpoint);
 
@@ -1310,6 +1318,10 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
   cout << "Writing concordance factors to " << fileNames.getConcordanceFile() << "...." << flush;
   fout << "Writing concordance factors to " << fileNames.getConcordanceFile() << "...." << flush;
   ofstream concordanceStr(fileNames.getConcordanceFile().c_str());
+  if(concordanceStr.fail()) {
+    cerr <<"Error: Cannot open file " << fileNames.getConcordanceFile() << "." << endl;
+    fout <<"Error: Cannot open file " << fileNames.getConcordanceFile() << "." << endl;
+  } else{
   concordanceStr.setf(ios::fixed, ios::floatfield);
   concordanceStr.setf(ios::showpoint);
 
@@ -1511,30 +1523,36 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
     while(sum < .950)  sum += splitsGeneMatrixPP[i][++hi];
     concordanceStr << "90% CI for CF = (" << lo << "," << hi << ")" << endl << endl;
   }
-  concordanceStr.close();
   cout << "done." << endl;    
   fout << "done." << endl;    
 
   cout << "Average SD of mean sample-wide CF: " << AvgOfSDacrossSplits<<endl;
   fout << "Average SD of mean sample-wide CF: " << AvgOfSDacrossSplits<<endl;
+  }
+  concordanceStr.close();
 
   // .pairs
   if(rp.getCalculatePairs()) {
     cout << "Writing tree pair data to " << fileNames.getPairTreeFile() << "...." << flush;
     fout << "Writing tree pair data to " << fileNames.getPairTreeFile() << "...." << flush;
     ofstream pairsStr(fileNames.getPairTreeFile().c_str());
-    pairsStr.setf(ios::fixed, ios::floatfield);
-    pairsStr.setf(ios::showpoint);
-    double total = pairCounts[0][0];
-    for(int i=0;i<numGenes;i++) {
-      pairsStr << setw(4) << i << " ";
-      for(int j=0;j<numGenes;j++)
-	pairsStr << setw(7) << setprecision(4) << (double) (i < j ? pairCounts[i][j] : pairCounts[j][i]) / total;
-      pairsStr << endl;
+    if(pairsStr.fail()) {
+      cerr <<"Error: Cannot open file " << fileNames.getPairTreeFile() << "." << endl;
+      fout <<"Error: Cannot open file " << fileNames.getPairTreeFile() << "." << endl;
+    } else {
+      pairsStr.setf(ios::fixed, ios::floatfield);
+      pairsStr.setf(ios::showpoint);
+      double total = pairCounts[0][0];
+      for(int i=0;i<numGenes;i++) {
+	pairsStr << setw(4) << i << " ";
+	for(int j=0;j<numGenes;j++)
+	  pairsStr << setw(7) << setprecision(4) << (double) (i < j ? pairCounts[i][j] : pairCounts[j][i]) / total;
+	pairsStr << endl;
+      }
+      pairsStr.close();
+      cout << "done." << endl;
+      fout << "done." << endl;
     }
-    pairsStr.close();
-    cout << "done." << endl;
-    fout << "done." << endl;
   }
 
   // .topologies --- eliminated
@@ -1567,11 +1585,16 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
   cout << "Writing single and joint gene posteriors to " << fileNames.getGenePosteriorFile() << "...." << flush;
   fout << "Writing single and joint gene posteriors to " << fileNames.getGenePosteriorFile() << "...." << flush;
   ofstream genePostStr(fileNames.getGenePosteriorFile().c_str());
-  for(int i=0;i<numGenes;i++)
-    genes[i]->print(genePostStr,newTable,rp.getNumUpdates()*rp.getNumRuns(),topologies,max);
-  genePostStr.close();
-  cout << "done." << endl;
-  fout << "done." << endl;
+  if(genePostStr.fail()) {
+    cerr <<"Error: Cannot open file " << fileNames.getGenePosteriorFile() << "." << endl;
+    fout <<"Error: Cannot open file " << fileNames.getGenePosteriorFile() << "." << endl;
+  } else {
+    for(int i=0;i<numGenes;i++)
+      genes[i]->print(genePostStr,newTable,rp.getNumUpdates()*rp.getNumRuns(),topologies,max);
+    genePostStr.close();
+    cout << "done." << endl;
+    fout << "done." << endl;
+  }
 
   if(rp.getNumChains()>1) {
     cout.setf(ios::fixed, ios::floatfield);
@@ -1581,7 +1604,7 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
     for (unsigned int irun=0; irun<rp.getNumRuns(); irun++){
       cout << "\nMCMCMC acceptance statistics in run " << irun+1 <<":" << endl;
       cout << "         alpha1 <-->         alpha2 accepted proposed proportion" << endl;
-      fout << "\nMCMCMC acceptance statisticsin run " << irun+1 <<":" << endl;
+      fout << "\nMCMCMC acceptance statistics in run " << irun+1 <<":" << endl;
       fout << "alpha1          <--> alpha2         accepted proposed proportion" << endl;
       for(int i=0;i<rp.getNumChains()-1;i++) {
 	cout << setw(15) << alphas[i] << " <-->" << setw(15) << alphas[i+1];
@@ -1637,29 +1660,30 @@ int main(int argc, char *argv[])
   vector<string> translateTable(0);
   vector<vector<int> > taxid(numGenes);
 
-  cout << "Reading in summary files...." << flush;
-  ofstream fout(fileNames.getOutFile().c_str());
-  fout << "Reading in summary files...." << flush;
-  bool missingTtable = readInputFiles(inputFiles,table,translateTable,topologies,max,fout,taxid);
-  numTaxa = translateTable.size();
-  cout << "done." << endl;
-
   // Open outfile to save all window output
   cout << "Screen output written to file " << fileNames.getOutFile() << endl;
+  ofstream fout(fileNames.getOutFile().c_str());
+  if(fout.fail()) {
+    cerr <<"Error: Cannot open file " << fileNames.getOutFile() << "." << endl;
+    exit(1);
+  }
   intro(fout);
 
+  cout << "Program initiated at " << ctime(&beginTime) << endl << endl;
   fout << "Program initiated at " << ctime(&beginTime) << endl << endl;
 
   fout << "Program invocation:";
   for(int i=0;i<argc;i++)
     fout << " " << argv[i];
   fout << endl << endl;
-  //  defaults.print(fout);
-  //  fout << endl;
-  //  printParameters(fout,fileNames,mp,rp);
-  //  fout << endl;
   showParameters(fout,fileNames,defaults,mp,rp);
   fout << endl;
+
+  cout << "Reading in summary files...." << flush;
+  fout << "Reading in summary files...." << flush;
+  bool missingTtable = readInputFiles(inputFiles,table,translateTable,topologies,max,fout,taxid);
+  numTaxa = translateTable.size();
+  cout << "done." << endl;
 
   if (missingTtable) {
     cout << "Warning: at least one locus has no 'translate' block." << endl;
@@ -1911,6 +1935,12 @@ int main(int argc, char *argv[])
   cout << "done." << endl;
   fout << "done." << endl;
 
+
+  time_t beginMCMCtime;
+  time(&beginMCMCtime);
+  cout << "MCMC initiated at " << ctime(&beginMCMCtime) << endl << endl;
+  fout << "MCMC initiated at " << ctime(&beginMCMCtime) << endl << endl;
+
   int numBurn = rp.getNumUpdates()/10;
   cout << "Beginning burn-in with " << numBurn << " updates (10% extra of desired updates)..." << endl;
   cout << "0   10   20   30   40   50   60   70   80   90   100" << endl;
@@ -2058,6 +2088,7 @@ int main(int argc, char *argv[])
   time_t endTime;
   time(&endTime);
 
+  cout << "Program ended at " << ctime(&endTime) << endl << endl;
   fout << "Program ended at " << ctime(&endTime) << endl << endl;
   int diff=endTime-beginTime,days=diff/(24*60*60),hours=diff%(24*60*60)/(60*60);
   int minutes=diff%(60*60)/60,seconds=diff%60;
