@@ -216,11 +216,17 @@ They can be summarized with:
 mbsum -n 501 -o y000.in    $BUCKY_HOME/bucky/data/yeast/y000/y000.run?.t
 \end{verbatim}
 
-\paragraph{Warning.}  
+\paragraph{Warnings.}  
 {\tt mbsum} will overwrite a file named \verb+filename+
 if such a file exists.
+
+Line breaks from Mac-formatted files may not be recognized properly. 
+If none of the trees are read, changing line breaks to a Unix format may help.
+
 From version 1.3, \texttt{mbsum} and \texttt{bucky} use translate tables,
 so that taxa may appear in a different order for different genes.
+
+
 
 \section{Running bucky}
 %\paragraph{Syntax.}
@@ -275,24 +281,23 @@ of $\alpha$ than does the cold chain. The cold chain uses the $\alpha$ value
 given by the option {\tt -a}. Warmer chains will use parameters 
 $m\alpha, m^2\alpha,\dots, m^{c-1}\alpha$. Default $m$ is 10.
 The independence prior corresponds to $\alpha=\infty$ so MCMCMC is not used
-with this prior.\\
-{\tt -s subsample-rate}&Use this option for thinning the sample. All post-burnin samples
-will be used for summarizing the posterior distribution of gene-to-tree maps, 
-but you may choose to save just a subsample of these gene-to-tree maps. One sample
-will be saved every $s$ updates. This option will have an effect only if option
-\verb+--create-sample-file+ is chosen. Default is 1: no thinning.\\
-{\tt -s1 seed1}&Default is 1234. 
-%Two seeds are used by the random number generator.
-\\
-{\tt -s2 seed2}&Default is 5678.
+with this prior.
 \end{tabular}
 
 \noindent
 \hspace*{-.3in}
 \begin{tabular}{l|p{4.4in}}
+{\tt -s subsample-rate}&Use this option for thinning the sample. All post-burnin samples
+will be used for summarizing the posterior distribution of gene-to-tree maps, 
+but you may choose to save just a subsample of these gene-to-tree maps. One sample
+will be saved every $s$ updates. This option will have an effect only if option
+\verb+--create-sample-file+ is chosen. Default is 1: no thinning.\\
+{\tt -s1 seed1}&Default is 1234. %Two seeds are used by the random number generator.
+\\
+{\tt -s2 seed2}&Default is 5678.\\
 {\tt -cf cutoff}&All splits with estimated sample-wide CF above this cutoff 
 will be included in the list to have their summary information and their genome-wide CF
-displayed.\\
+displayed. Default is $0.05$.\\
 \verb+--calculate-pairs+&Use this option to calculate the 
 posterior probability that pairs of loci share the same tree. Default is 
 to {\sc not} use this option.\\
@@ -338,8 +343,8 @@ per locus.\\
 columns. The entries in the table are posterior probabilities of trees from the
 separate locus analyses. It is a one-file summary of the first step of BCA.\\
 \end{tabular}
-\bigskip\bigskip
 
+\bigskip\bigskip
 \bigskip
 
 The following files give the full results as well as various result summaries.
@@ -350,6 +355,7 @@ The {\sc cf} of a clade is the proportion of loci that have
 the clade. Sample-wide refers to loci in the sample and genome-wide 
 refers to loci in the entire genome.
 
+\bigskip
 
 %\hspace*{-1in}
 %\begin{tabular}{l|p{5.5in}}
