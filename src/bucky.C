@@ -120,6 +120,11 @@ bool readFile(string filename, int i, vector<string> &topologies, vector<vector<
 
   // search for the gene's translate table
   bool hasTtable = false;
+  bool useTranslateID = false;
+  vector<int> translateID;
+  // in case the numbers in the translate table are not from 1 to Ntax
+  // translateID[i] = ID given to the taxon on line i+1 in the gene file
+
   string keyword;
   f >> keyword;
   if(keyword=="translate" || keyword=="TRANSLATE" || keyword=="Translate")
@@ -141,6 +146,7 @@ bool readFile(string filename, int i, vector<string> &topologies, vector<vector<
 	cerr << "Error in reading the translate table for gene "<<i<<endl;
 	exit(1);
       }
+      translateID.push_back(taxonnumber);
       size_t pos=taxonname.rfind(",");
       if (pos!=string::npos)
 	taxonname.replace(pos,1,"");
@@ -168,6 +174,11 @@ bool readFile(string filename, int i, vector<string> &topologies, vector<vector<
       }
     }
     numTaxa=taxid.size();
+    for (int i=0; i<numTaxa; i++)
+      if (translateID[i]!=i+1){
+	useTranslateID=true;
+	break;
+      }
   }
 
   // set zeros for ith row of table
@@ -236,7 +247,15 @@ bool readFile(string filename, int i, vector<string> &topologies, vector<vector<
 	}
 	else {
 	  itop >> z;
-	  otop << taxid[z-1];
+	  if (useTranslateID){  //find row # that has taxon ID z in the gene file
+	    for (int i=0; i<numTaxa; i++)
+	      if (translateID[i]==z){
+		otop << taxid[i];
+		break;
+	      }
+	  }
+	  else
+	    otop << taxid[z-1];
 	}
       } while(c != ';' && c != EOF && itop.good());
       top = otop.str();

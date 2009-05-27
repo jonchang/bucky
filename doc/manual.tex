@@ -422,8 +422,8 @@ directory\\ \verb+$BUCKY_HOME/bucky/data/example1/+ %$
 contains 10 folders named {\tt ex0} to {\tt ex9}, one for each locus. 
 These 10 folders contain a single file each, named {\tt ex.in}, which was 
 created by  {\tt mbsum}.
-is also provided in For analyzing these data, one
-can use the default parameters and type either
+For analyzing these data, one
+can use the default parameters and type
 \begin{verbatim}
 bucky $BUCKY_HOME/bucky/data/example1/ex?/ex.in
 \end{verbatim}%$
@@ -475,7 +475,11 @@ bucky -a 2.5 -n 150000 -k 4 -c 4 --create-sample-file --calculate-pairs
 
 \section{General notes}
 
-There is a limit to 32 taxa (or 31?).
+There is a limit to 32 taxa, or actually 31 to date.
+Currently with 32 taxa, \bu{} ouputs correct \cf{}s of clades 
+but there is a bug in assembling clades with high \cf{}s 
+into a concordance tree. 
+
 
 \paragraph{First step of BCA: Analysis of individual loci in MrBayes.}
 Any model of sequence evolution can be selected for any locus: there need 
