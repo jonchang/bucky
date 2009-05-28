@@ -97,7 +97,7 @@
 
 using namespace std;
 string VERSION = "1.3.0";
-string DATE = "6 January 2009";
+string DATE = "27 May 2009";
 string COPYRIGHT = "Copyright (C) 2006-2008 by Bret Larget and Cecile Ane";
 
 //

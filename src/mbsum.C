@@ -141,8 +141,7 @@ void Node::rootReorder() {
   if(leaf)
     return;
 
-  if(edges.size()>2)
-    sort(edges.begin(),edges.end()-1,RootEdgeCompare(this));
+  sort(edges.begin(),edges.end(),RootEdgeCompare(this));
 }
 
 void Node::reorder(Edge* par) {
