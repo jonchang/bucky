@@ -425,35 +425,18 @@ void Tree::printTop(ostream& f) {
     }
   }
   else { // degree is 3 or more
-    // combine first degree-1 subtrees 
-    // then check to see if the last subtree (the outgroup) is number 1
-    //   if so, print it first
-    Edge* last = root->getEdge(degree-1);
-    Node* right = last->getOtherNode(root);
-    int outgroup = ( right->isLeaf() ? right->getNumber() : -1);
-
-    if(outgroup==1) {
-      last->getOtherNode(root)->printTop(f,last);
-      f << ",(";
-      for(int i=0;i<degree-1;i++) {
-	Edge* e = root->getEdge(i);
-	e->getOtherNode(root)->printTop(f,e);
-	if(i < degree-2)
-	  f << ",";
-      }
-      f << ")";
+    // combine last degree-1 subtrees 
+    // so as to root the tree --required for bucky
+    Edge* first = root->getEdge(0);
+    first->getOtherNode(root)->printTop(f,first);
+    f << ",(";
+    for(int i=1;i<degree;i++) {
+      Edge* e = root->getEdge(i);
+      e->getOtherNode(root)->printTop(f,e);
+      if(i < degree-1)
+	f << ",";
     }
-    else {
-      f << "(";
-      for(int i=0;i<degree-1;i++) {
-	Edge* e = root->getEdge(i);
-	e->getOtherNode(root)->printTop(f,e);
-	if(i < degree-2)
-	  f << ",";
-      }
-      f << "),";
-      last->getOtherNode(root)->printTop(f,last);
-    }
+    f << ")";
   }
   f << ");";
 }
