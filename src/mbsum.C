@@ -184,6 +184,7 @@ private:
   int numEdges;
   vector<Node*> nodes;
   vector<Edge*> edges;
+  int maxTaxNumber;
 };
 
 bool cmpNodes(Node* x,Node* y) { return( x->getNumber() < y->getNumber() ); }
@@ -202,7 +203,7 @@ void Node::setNumbers(int& nextNumber,Edge* parentEdge) {
 void Tree::setNumbers() {
   // Internal nodes are not numbered when tree is read.
   // After reading the tree, we can give numbers to the internal nodes.
-  int nextNumber = numTaxa+1;
+  int nextNumber = maxTaxNumber + 1;
   for(int i=0;i<nodes[0]->getNumEdges();i++) {
     Edge* e = nodes[0]->getEdge(i);
     e->getOtherNode(nodes[0])->setNumbers(nextNumber,e);
@@ -305,6 +306,8 @@ void Tree::readSubtree(istringstream& s,Node* parent,int& numLeft,int numLine)
     int num;
     s >> num;
     n->setNumber(num);
+    if (num > maxTaxNumber)
+      maxTaxNumber = num;
     n->setLeaf(true);
     numTaxa++;
   }
@@ -338,6 +341,7 @@ Tree::Tree(string line,int lineNumber)
   
   numEdges = 0;
   numTaxa = 0;
+  maxTaxNumber = 0;
 
   nodes.push_back(new Node()); // root of the tree, thinks it is a leaf....
   numNodes = 1;
@@ -373,6 +377,8 @@ Tree::Tree(string line,int lineNumber)
     s >> n;
     nodes[0]->setLeaf(true);
     nodes[0]->setNumber(n);
+    if (n>maxTaxNumber)
+      maxTaxNumber = n;
     numTaxa++;
     if(c==';')
       s >> c;
