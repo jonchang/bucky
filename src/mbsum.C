@@ -608,7 +608,19 @@ int main(int argc, char *argv[])
     int numActuallySkipped=0;
     int skipInFile = numSkip;
     bool readTtable = false;
-    while(getline(f,line)) {
+    // determine EOL character
+    char foo;
+    do {
+      foo = f.get();
+    } while( (foo != '\n') && (foo != '\r') && !f.fail() );
+    if(foo == '\r') {
+      foo = f.peek();
+      if(foo != '\n')
+	foo = '\r';
+    }
+    // Now use foo as the EOL character
+
+    while(getline(f,line,foo)) {
       lineNumber++;
       istringstream s(line);
       string keyTree,name,equalSign;
