@@ -24,7 +24,7 @@
 
 // Input:    [options] <summary files>
 //
-// Options:  
+// Options:
 //            [-a alpha-value]                --- Dirichlet process hyper-parameter
 //            [-n number-of-MCMC-updates]     --- number of MCMC updates per chain
 //            [-c number-of-chains]           --- number of separate chains for MCMCMC
@@ -43,8 +43,8 @@
 //            [--help] prints the brief usage message
 //            [--version] prints brief intro and version number
 //
-// Output:   
-//           
+// Output:
+//
 //  fileRoot.cluster       --- summary of cluster size (number of groups)
 //  fileRoot.concordance   --- split-by-split summary of concordance factor
 //  fileRoot.gene          --- gene by gene summary of joint posterior information
@@ -79,7 +79,7 @@
 
 // Changes in version 1.3.0
 // --- Use git repository: use git commands to get more details on previous versions.
-// --- Added independent runs are diagnostic summaries to check convergence. 
+// --- Added independent runs are diagnostic summaries to check convergence.
 // --- Fixed bug in the group update.
 // --- Translate tables are read and used to check all taxa are the same.
 
@@ -134,7 +134,7 @@ bool readFile(string filename, int i, vector<string> &topologies, vector<vector<
   int numTaxa=-1;
 
   f.open(filename.c_str());
-  if (hasTtable){ 
+  if (hasTtable){
   // read the gene's translate table
     string taxonname;
     int taxonnumber;
@@ -281,7 +281,7 @@ double State::calculateLogPriorProb()
     logPriorProb += logA(alphaOverTop,counts[indices[i]]);
   logPriorProb -= logA(alpha,genes.size());
   return logPriorProb;
-  
+
 }
 
 int State::updateOne(int i,Rand& rand) {
@@ -500,7 +500,7 @@ void State::print(ostream& f) {
   f << "   gene   top" << endl;
   for(int i=0;i<genes.size();i++)
     f << setw(7) << i << setw(6) << tops[i] << endl;
-    
+
 }
 
 void State::updateSplits(vector<vector<int> >& totals,vector<vector<int> >& topSplitsIndex) {
@@ -529,24 +529,22 @@ void State::updatePairCounts(vector<vector<int> >& counts)
 
 Node* Node::getNeighbor(int i) const { return edges[i]->getOtherNode(this); }
 
-int Node::setAllTaxa(Node* parent,unsigned int all) {
-  int x,ep;
+TaxonSet Node::setAllTaxa(Node* parent,TaxonSet all) {
+  int ep;
+  TaxonSet allMx = all;
   Edge* e;
   if(leaf) {
-    x = 1;
-    for(int i=0;i<number;i++)
-      x *= 2;
-    taxa[0] = all - x;
+    allMx = all.excludeTaxon(number);
+    taxa[0] = allMx;
     e = edges[0];
   }
   else {
-    x = 0;
     for(int i=0;i<3;i++) {
-      Node* n = getNeighbor(i); 
+      Node* n = getNeighbor(i);
       if(n != parent) {
-	int y = n->setAllTaxa(this,all);
-	setTaxa(i,y);
-	x += y;
+	TaxonSet y = n->setAllTaxa(this,all);
+	setTaxa(i, all - y);
+	allMx = allMx & y;
       }
       else {
 	e = edges[i];
@@ -554,26 +552,30 @@ int Node::setAllTaxa(Node* parent,unsigned int all) {
       }
     }
   }
-  int s = (x%2 == 1 ? x : all - x);
+  TaxonSet s = (allMx[0] == 0 ? all - allMx : allMx);
   if(!leaf)
-    setTaxa(ep,all-x);
+    setTaxa(ep,allMx);
   e->setSplit(s);
-  return x;
+  return allMx;
 }
 
 void Tree::setAllTaxa() {
   Node* root = nodes[0]->getNeighbor(0);
   for(int i=0;i<3;i++)
-    root->setTaxa(i,root->getNeighbor(i)->setAllTaxa(root,all));
+    root->setTaxa(i,all - root->getNeighbor(i)->setAllTaxa(root,all));
 }
 
 void Node::print(ostream& f) const
 {
   f << setw(3) << number << ":";
-  f << " taxa = (" << taxa[0];
+  TaxonSet t = taxa[0];
+  f << " taxa = (" << t;
   if(!leaf)
-    for(int i=1;i<3;i++)
-      f << "," << taxa[i];
+    for(int i=1;i<3;i++) {
+        t = taxa[i];
+      f << "," << t;
+    }
+
   f << "), ";
   for(int i=0;i<3;i++) {
     if(i>0 && !leaf)
@@ -588,15 +590,14 @@ void Edge::print(ostream& f,int numTaxa) const
 {
   f << setw(3) << number << ":";
   f << " n[" << nodes[0]->getNumber() << "] <-> " << "n[" << nodes[1]->getNumber() << "], split = ";
-  Split s(split,numTaxa);
-  s.print(f);
+  split.print(f);
   f << endl;
 }
 
 void Tree::print(ostream& f) const
 {
   f << top << endl;
-  f << "numTaxa = " << numTaxa << ", numNodes" << numNodes << ", numEdges = " << numEdges << endl;
+  f << "numTaxa = " << numTaxa << ", numNodes = " << numNodes << ", numEdges = " << numEdges << endl;
   f << "Nodes:" << endl;
   for(int i=0;i<numNodes;i++)
     nodes[i]->print(f);
@@ -609,20 +610,19 @@ void Tree::connect(string top)
 {
   int currentInternalNode=numTaxa,currentLeafEdge=0,currentInternalEdge=numTaxa;
   Node *node1,*node2;
-  char ch;
   int n;
 
   istringstream topStr(top);
-  topStr >> ch;
+  char ch = topStr.peek();
   if(ch!='(') {
-    topStr.putback(ch);
     topStr >> n;
   }
   else {
+    topStr >> ch;
     node1 = connectInt(topStr,currentInternalNode,currentLeafEdge,currentInternalEdge);
     topStr >> ch;
     if(ch!=',') {
-      cerr << "Error: Cannot parse topology string, expected ',', found " << ch << endl; 
+      cerr << "Error: Cannot parse topology string, expected ',', found " << ch << endl;
      exit(1);
     }
     node2 = connectInt(topStr,currentInternalNode,currentLeafEdge,currentInternalEdge);
@@ -637,15 +637,14 @@ void Tree::connect(string top)
 
 Node* Tree::connectInt(istream& topStr,int& currentInternalNode,int& currentLeafEdge,int& currentInternalEdge)
 {
-  char ch;
   int n;
-  topStr >> ch;
+  char ch = topStr.peek();
   if(ch!='(') {
-    topStr.putback(ch);
     topStr >> n;
     return nodes[n-1];
   }
   else {
+    topStr >> ch;
     Node *node1,*node2;
     node1 = connectInt(topStr,currentInternalNode,currentLeafEdge,currentInternalEdge);
     topStr >> ch;
@@ -738,7 +737,7 @@ void usage(Defaults defaults)
   cerr << "  Options:" << endl;
   cerr << "  Parameter              | Usage                      | Default Value" << endl;
   cerr << "  -------------------------------------------------------------------" << endl;
-  cerr << "  alpha                  | -a number                  | " << defaults.getAlpha() << endl; 
+  cerr << "  alpha                  | -a number                  | " << defaults.getAlpha() << endl;
   cerr << "  # of runs              | -k integer                 | " << defaults.getNumRuns() << endl;
   cerr << "  # of MCMC updates      | -n integer                 | " << defaults.getNumUpdates() << endl;
   cerr << "  # of chains            | -c integer                 | " << defaults.getNumChains() << endl;
@@ -1013,7 +1012,7 @@ bool readInputFiles(vector<string>& inputFiles,vector<vector<double> >& table, v
     else
       allno = false;
   }
-  
+
   // warning if genes do not all have translate tables
   if (oneno && !allno){ // some genes have a table, but not all
       cout << "\nWarning! the following files had no translate table:"<<endl;
@@ -1181,7 +1180,7 @@ void GenomewideDistribution::updateConvolutionWeight(double alpha){
   int bestj = (int) (ngenes/2+alpha*(0.5-priorProbability));
   if (bestj>ngenes-1) bestj=ngenes-1;
   else if (bestj<1) bestj=1;
-  double logZ = 0; 
+  double logZ = 0;
   for (int i=1; i<ngrid; i++) logZ += exp(logweight[i][bestj]);
   logZ = log( logZ/ngrid );
   for (int i=1; i<ngrid; i++)
@@ -1205,7 +1204,7 @@ void GenomewideDistribution::updateGenomewide(double alpha) {
   genomewidePosteriorMean = alpha/(alpha+ngenes)*priorProbability + ngenes/(alpha+ngenes)*samplewidePosteriorMean;
 
   vector<double> csum(genomewide.size());
-  for(int i=0;i<ngrid+1;i++) { 
+  for(int i=0;i<ngrid+1;i++) {
     // matrix multiplication: genomewide = convolutionWeights * samplewide (density)
     double sumprod=0;
     for (int j=0; j<ngenes+1; j++)
@@ -1234,7 +1233,7 @@ void GenomewideDistribution::updateGenomewide(double alpha) {
 // Should have separate functions for each type of output
 void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int numTaxa,vector<string> topologies,
 		 int numGenes,RunParameters& rp,ModelParameters& mp,vector<vector<int> >& newTable,
-		 vector<vector<int> >& clusterCount, vector<int>& splits,  vector<vector<vector<int> > >& splitsGeneMatrix,
+		 vector<vector<int> >& clusterCount, vector<TaxonSet>& splits,  vector<vector<vector<int> > >& splitsGeneMatrix,
 		 vector<vector<int> >& pairCounts,   vector<Gene*>& genes, vector<double>& alphas,
 		 vector<vector<int> >& mcmcmcAccepts,vector<vector<int> >& mcmcmcProposals)
 {
@@ -1385,40 +1384,39 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
 
   // ctree is the vector of splits in the primary concordance tree
   // gwDistr is the vector of GenomewideDistribution for splits in the primary concordance tree
-  vector<Split> ctree;
+  vector<TaxonSet> ctree;
   vector<GenomewideDistribution*> gwDistr;
   // otherClade is the vector of splits with CF>.10 but not in the concordance tree
   // otherGwDistr is the vector of GenomewideDistribution for those splits
-  vector<Split> otherClade;
+  vector<TaxonSet> otherClade;
   vector<GenomewideDistribution*> otherGwDistr;
 
   for(int w=0;w<splits.size();w++) {
     int i = sw[w].getIndex();
-    Split s(splits[i],numTaxa);
-    s.setWeight(sw[w].getWeight());
-    unsigned int y = s.getClade();
+    TaxonSet y = splits[i];
+    y.setWeight(sw[w].getWeight());
     bool keep=true;
     if (sw[w].getWeight() <= rp.getSwCFcutoff() * numGenes)
       keep=false;
     bool add=true;
     for(int j=0;j<ctree.size();j++) {
-      unsigned int z = ctree[j].getClade();
-      if(!isCompatible(y,z,all)) {
+      TaxonSet z = ctree[j];
+      if(!y.isCompatible(z)) {
 	add = false;
 	break;
       }
     }
     if(add || keep){
-      s.updatePriorProbability();
+      y.updatePriorProbability();
       if (add)
-	ctree.push_back(s);
+	ctree.push_back(y);
       else
-	otherClade.push_back(s);
+	otherClade.push_back(y);
       GenomewideDistribution* g;
       g = new GenomewideDistribution(numGenes, rp.getNumGenomewideGrid());
-      g->updatePriorProbability(s);
+      g->updatePriorProbability(y);
       g->updateSamplewide(splitsGeneMatrixPP[i]);
-      if (!mp.getUseIndependencePrior()){ 
+      if (!mp.getUseIndependencePrior()){
 	// under independence: genomewide CF is concentrated on priorProbability.
 	g->updateConvolutionWeight(alphas[0]);
 	g->updateGenomewide(alphas[0]);
@@ -1430,7 +1428,7 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
 	  for(int j=0;j<numGenes+1;j++)
 	    meanpostCF += j * (double)splitsGeneMatrix[irun][i][j];
 	  meanpostCF /= (double)rp.getNumUpdates();
-	  meanpostCFsd += (meanpostCF - s.getWeight()) * (meanpostCF - s.getWeight());
+	  meanpostCFsd += (meanpostCF - y.getWeight()) * (meanpostCF - y.getWeight());
 	}
 	meanpostCFsd = sqrt(meanpostCFsd / (rp.getNumRuns()-1));  // number of genes
 	g->setSamplewidePosteriorMeanSD(meanpostCFsd / numGenes); // proportion of genes
@@ -1448,13 +1446,21 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
   double AvgOfSDacrossSplits = 0.0;
 
   vector<TaxonSet> tset;
-  for(vector<Split>::iterator p=ctree.begin();p!=ctree.end();p++)
-    tset.push_back( *(new TaxonSet(*p)) );
+  for(vector<TaxonSet>::iterator p=ctree.begin();p!=ctree.end();p++) {
+    TaxonSet a = *p;
+    // Currently, splits are represented by the part containing the first taxon.
+    // We will instead represent a taxon set for a split as the taxa excluding an outgroup,
+    // presumed to be the last taxon.
+
+    if (!a.all() && a[numTaxa - 1]) {
+       a = a.flip();
+    }
+
+    tset.push_back(a);
+  }
 
   sort(tset.begin(),tset.end());
-  TaxonSet allTaxa(numTaxa);
-  allTaxa.setAll();
-  tset.push_back( *(new TaxonSet(allTaxa)) );
+  tset.push_back(TaxonSet::get());
 
   ConcordanceTree z(tset,numGenes);
   concordanceStr << "Primary Concordance Tree Topology:" << endl;
@@ -1472,7 +1478,7 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
   concordanceStr << endl;
 
   for(int w=0;w<ctree.size();w++) {
-    ctree[w].print(concordanceStr); 
+    ctree[w].print(concordanceStr);
     gwDistr[w]->printSampleCF(concordanceStr);
     if (!mp.getUseIndependencePrior())
       gwDistr[w]->printGenomeCF(concordanceStr);
@@ -1486,7 +1492,7 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
   concordanceStr << "Splits NOT in the Primary Concordance Tree but with estimated CF > "
 		 << rp.getSwCFcutoff() <<":"<<endl;
   for(int w=0;w<otherClade.size();w++) {
-    otherClade[w].print(concordanceStr); 
+    otherClade[w].print(concordanceStr);
     otherGwDistr[w]->printSampleCF(concordanceStr);
     if (!mp.getUseIndependencePrior())
       otherGwDistr[w]->printGenomeCF(concordanceStr);
@@ -1505,8 +1511,7 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
 
   for(int w=0;w<splits.size();w++) {
     int i = sw[w].getIndex();
-    Split s(splits[i],numTaxa);
-    s.print(concordanceStr);
+    splits[i].print(concordanceStr);
     concordanceStr << endl;
 
     int a=numGenes,b=0;
@@ -1554,8 +1559,8 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
     while(sum < .950)  sum += splitsGeneMatrixPP[i][++hi];
     concordanceStr << "90% CI for CF = (" << lo << "," << hi << ")" << endl << endl;
   }
-  cout << "done." << endl;    
-  fout << "done." << endl;    
+  cout << "done." << endl;
+  fout << "done." << endl;
 
   cout << "Average SD of mean sample-wide CF: " << AvgOfSDacrossSplits<<endl;
   fout << "Average SD of mean sample-wide CF: " << AvgOfSDacrossSplits<<endl;
@@ -1758,12 +1763,6 @@ int main(int argc, char *argv[])
   // collapse the table to only unique topologies, with updated counts
   // ??update the translate table and the taxid vectors??
 
-  if(numTaxa > 32) { // are you sure it works with exactly 32 taxa?
-    cerr << "Error: BUCKy version " << VERSION << " only works with 32 or fewer taxa." << endl;
-    fout << "Error: BUCKy version " << VERSION << " only works with 32 or fewer taxa." << endl << flush;
-    exit(1);
-  }
-
   int numTrees = topologies.size();
   cout << "Read " << numGenes << " genes with a total of " << numTrees << " different sampled tree topologies" << endl;
   fout << "Read " << numGenes << " genes with a total of " << numTrees << " different sampled tree topologies" << endl;
@@ -1795,7 +1794,7 @@ int main(int argc, char *argv[])
     ofstream singleStr(fileNames.getSingleFile().c_str());
     singleStr.setf(ios::fixed, ios::floatfield);
     singleStr.setf(ios::showpoint);
-    
+
     for(int i=0;i<numTrees;i++) {
       singleStr << setw(4) << i << " " << setw(max) << left << topologies[i].substr(0,max) << right;
       for(int j=0;j<numGenes;j++)
@@ -1852,22 +1851,23 @@ int main(int argc, char *argv[])
 // .top --- eliminated
 //  cout << "Writing topology summary to file " << fileNames.getTopologyFile() << "...." << flush;
 //  fout << "Writing topology summary to file " << fileNames.getTopologyFile() << "...." << flush;
-  vector<vector<int> > topologySplitsMatrix(topologies.size());
+  vector<vector<TaxonSet> > topologySplitsMatrix(topologies.size());
   if(numTaxa>3)
     for(int i=0;i<topologies.size();i++)
       topologySplitsMatrix[i].resize(numTaxa-3);
-  vector<int> splits; // sorted list of realized splits
+  vector<TaxonSet> splits; // sorted list of realized splits
 //  ofstream topologyStr(fileNames.getTopologyFile().c_str());
   for(int i=0;i<topologies.size();i++) {
 //    topologyStr << setw(4) << i << " " << setw(max) << left << topologies[i].substr(0,max) << right;
-    Tree t(numTaxa,topologies[i]);
+    TaxonSet all = TaxonSet::getTaxa(numTaxa);
+    Tree t(all,topologies[i]);
     SplitSet s;
     t.getSplits(s);
 //    s.printShort(topologyStr);
 //    topologyStr << endl;
 
     for(int j=0;j<numTaxa-3;j++) {
-      int x = s.getSplit(j);
+      TaxonSet x = s.getSplit(j);
       topologySplitsMatrix[i][j] = x;
       int n = find(splits.begin(),splits.end(),x) - splits.begin();
       if(n==splits.size())
@@ -2114,7 +2114,7 @@ int main(int argc, char *argv[])
   for (unsigned int irun=0; irun<rp.getNumRuns(); irun++)
     for(int i=0;i<rp.getNumChains();i++)
       delete states[irun][i];
-  
+
 
   time_t endTime;
   time(&endTime);

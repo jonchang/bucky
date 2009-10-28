@@ -9,38 +9,10 @@
 #include <vector>
 #include <list>
 #include <algorithm>
+#include "boost/dynamic_bitset.hpp"
+#include "TaxonSet.h"
 
 using namespace std;
-
-// General function to return log( prod_{i=0}^{n-1} (i+x) )
-//   which is used in the new model repeatedly.
-//   Assume that x > 0.
-double logA(double x,int n)
-{
-  if(n<0) {
-    cerr << "Error: logA called with negative n = " << n << endl;
-    exit(1);
-  }
-  if(n==0)
-    return 0.0;
-  double answer = log(x);
-  for(int i=1;i<n;i++)
-    answer += log(i + x);
-  return answer;
-}
-
-// General function to return log( number of unrooted binary trees with n taxa)
-double logUB(unsigned int n){
-  if(n<1){
-    cerr << "Error: logUB called with non-positive n = " << n << endl;
-    exit(1);
-  }
-  if (n<4) return 0.0;
-  double answer = 0.0;
-  for (unsigned int i=4;i<n+1;i++)
-    answer += log(static_cast<double>(2*i - 5));
-  return answer;
-}
 
 class Rand {
 /*
@@ -446,11 +418,6 @@ class Edge;
 class Node {
 public:
   Node(int n,int lf) : number(n) {
-    taxon = 1;
-    for(int i=1;i<n;i++)
-      taxon *= 2;
-    for(int i=0;i<3;i++)
-      taxa[i] = 0;
     if(lf)
       leaf = true;
     else
@@ -459,17 +426,16 @@ public:
   ~Node() {}
   int getNumber() const { return number; }
   Edge* getEdge(int n) const { return edges[n]; }
-  bool isLeaf() const { return leaf; } 
-  int getTaxa(int i) const { return taxa[i]; }
+  bool isLeaf() const { return leaf; }
+  TaxonSet getTaxa(int i) const { return taxa[i]; }
   void setEdge(int n,Edge *e) { edges[n]=e; }
-  void setTaxa(int i,int x) { taxa[i] = x; }
-  int setAllTaxa(Node*,unsigned int);
+  void setTaxa(int i,TaxonSet x) { taxa[i] = x; }
+  TaxonSet setAllTaxa(Node*,TaxonSet);
   void print(ostream&) const;
   Node* getNeighbor(int) const;
 private:
   int number;
-  int taxon; // 2^number for leaves, used as a bit vector
-  int taxa[3]; // integer representing bit vector of taxa in each of three subtrees for internal nodes
+  TaxonSet taxa[3]; // integer representing bit vector of taxa in each of three subtrees for internal nodes
   bool leaf;
   Edge* edges[3];
 };
@@ -480,29 +446,26 @@ public:
   int getNumber() const { return number; }
   Node* getNode(int i) { return nodes[i]; }
   Node* getOtherNode(const Node *n) const { return (n==nodes[0] ? nodes[1] : nodes[0]); }
-  int getSplit() { return split; }
-  void setSplit(int s) {split = s; }
+  TaxonSet getSplit() { return split; }
+  void setSplit(TaxonSet s) {split = s; }
   void setNode(int i,Node *n) { nodes[i] = n; }
   void print(ostream&,int) const;
   ~Edge() {}
 private:
   int number;
-  int split;
+  TaxonSet split;
   Node* nodes[2];
 };
 
-class Split;
 class SplitSet;
 
 class Tree {
 public:
-  Tree(int n,string top) : numTaxa(n), numNodes(2*n - 2), numEdges(2*n - 3), numSplits(n - 3) {
-    int k=1;
-    all = 0;
-    for(int i=0;i<numTaxa;i++) {
-      all += k;
-      k *= 2;
-    }
+  Tree(TaxonSet allTaxa,string top) : all(allTaxa) {
+    numTaxa = all.getNumTaxa();
+    numNodes = 2*numTaxa - 2;
+    numEdges = 2 * numTaxa - 3;
+    numSplits = numTaxa - 3;
     nodes.resize(numNodes);
     edges.resize(numEdges);
     for(int i=0;i<numTaxa;i++)
@@ -519,7 +482,7 @@ public:
       delete nodes[i];
     for(int i=0;i<numEdges;i++)
       delete edges[i];
-  }    
+  }
   void connect(string);
   Node* connectInt(istream&,int&,int&,int&);
   Node* connectThreeNodes(Node*,Node*,Node*,int&,int&);
@@ -531,66 +494,16 @@ public:
   int getNumNodes() const { return numNodes; }
   int getNumEdges() const { return numEdges; }
   int getNumSplits() const { return numSplits; }
-  int getAll() const { return all; }
+  TaxonSet getAll() const { return all; }
   Node* getNode(int i) const { return nodes[i]; }
   Edge* getEdge(int i) const { return edges[i]; }
   string getTop() const { return top; }
 private:
-  int numTaxa,numNodes,numEdges,numSplits,all;
+  int numTaxa,numNodes,numEdges,numSplits;
+  TaxonSet all;
   vector<Node *> nodes;
   vector<Edge *> edges;
   string top;
-};
-
-class Split {
-public:
-  Split() {}
-  Split(unsigned int c,int x) : clade(c), numTaxa(x) {}
-  void setClade(unsigned int x) { clade = x; }
-  unsigned int getClade() { return clade; }
-  void setNumTaxa(int x) { numTaxa = x; }
-  int getNumTaxa() { return numTaxa; }
-  double getWeight() { return weight; }
-  void setWeight(double x) { weight = x; }
-  void print(ostream& f) {
-    vector<int> left;
-    vector<int> right;
-    unsigned int c = clade;
-    for(int i=1;i<=numTaxa;i++) {
-      if(c % 2 == 1)
-	left.push_back(i);
-      else
-	right.push_back(i);
-      c /= 2;
-    }
-    f << "{";
-    if(left.size()>0)
-      f << left[0];
-    for(int i=1;i<left.size();i++)
-      f << "," << left[i];
-    f << "|";
-    if(right.size()>0)
-      f << right[0];
-    for(int i=1;i<right.size();i++)
-      f << "," << right[i];
-    f << "}";
-  }
-  double getPriorProbability(){return priorProbability;}
-  void updatePriorProbability(){
-    vector<int> left, right;
-    unsigned int c = clade;
-    for(int i=1;i<=numTaxa;i++) {
-      if(c % 2 == 1) left.push_back(i);
-      else right.push_back(i);
-      c /= 2;
-    }
-    priorProbability = exp(logUB(left.size()+1) + logUB(right.size()+1)-logUB(numTaxa));
-  }
-private:
-  unsigned int clade;
-  int numTaxa;
-  double weight;
-  double priorProbability;
 };
 
 class SplitSet {
@@ -603,163 +516,36 @@ class SplitSet {
     }
   }
   void printShort(ostream& f) {
-    for(int i=0;i<splits.size();i++)
-      f << setw(5) << splits[i].getClade() << " ";
+    for(int i=0;i<splits.size();i++) {
+      TaxonSet t = splits[i];
+      f << setw(5) << t << " ";
+    }
   }
   int getNumTaxa() { return numTaxa; }
-  int getSplit(int i) { return splits[i].getClade(); }
+  TaxonSet getSplit(int i) { return splits[i]; }
   void setNumTaxa(int x) { numTaxa = x; }
-  void setAll(unsigned int a) { all = a; }
-  void setSplit(int i,int c) {
-    splits[i].setClade(c);
-    splits[i].setNumTaxa(numTaxa);
+  void setAll(TaxonSet a) { all = a; }
+  void setSplit(int i,TaxonSet c) {
+    splits[i] = c;
   }
   void copySplits(Tree& t) { t.getSplits(*this); }
   void resize(int n) { splits.resize(n); }
  private:
-  unsigned int all;
+  TaxonSet all;
   int numTaxa;
-  vector<Split> splits;
+  vector<TaxonSet> splits;
 };
-
-// class TaxonSet is a vector<bool> and associated methods for representing a set of taxa.
-// Eventually, use this to replace class Split.
-// For now, just use it to find the concordance tree.
-
-class TaxonSet {
-public:
-  TaxonSet() {}
-  TaxonSet(int n) {
-    taxonSet.resize(n,false);
-  }
-  TaxonSet(Split);
-  void setNumTaxa(int n) {
-    taxonSet.resize(n,false);
-  }
-  int size() const { return taxonSet.size(); }
-  void set(int i,bool x) { taxonSet[i] = x; }
-  void set(int i) { taxonSet[i] = true; }
-  vector<bool> getTaxonSet() const { return taxonSet; }
-  bool get(int i) const { return taxonSet[i]; }
-  bool all() { // return true if all bits are set to be true
-   for(vector<bool>::iterator p=taxonSet.begin();p!=taxonSet.end();p++)
-     if(*p==false)
-       return false;
-   return true;
-  }
-  void setAll() { // set all bits to be true
-    for(vector<bool>::iterator p=taxonSet.begin();p!=taxonSet.end();p++)
-      *p = true;
-  }
-  bool leaf() { // return true if exactly one bit is true
-    int numTrue = 0;
-    for(vector<bool>::iterator p=taxonSet.begin();p!=taxonSet.end();p++)
-      if(*p==true)
-	numTrue++;
-    return( (numTrue==1) ? true : false );
-  }
-  int num() const { // return the number of true bits
-    int numTrue = 0;
-    for(vector<bool>::const_iterator p=taxonSet.begin();p!=taxonSet.end();p++)
-      if(*p==true)
-	numTrue++;
-    return numTrue;
-  }
-  void flip() { // flip all bits
-   for(vector<bool>::iterator p=taxonSet.begin();p!=taxonSet.end();p++)
-     *p = !(*p);
-  }
-  void setWeight(double x) { weight = x; }
-  double getWeight() { return weight; }
-  string getString() {
-    stringstream foo;
-    for(vector<bool>::iterator p=taxonSet.begin();p!=taxonSet.end();p++)
-      foo << *p;
-    string s;
-    foo >> s;
-    return s;
-  }
-  void print(ostream& f) {
-    for(vector<bool>::iterator p=taxonSet.begin(); p!=taxonSet.end();p++)
-      f << *p;
-  }
-  bool operator[](int i) const { return taxonSet[i]; }
-  TaxonSet operator&(const TaxonSet& x) const {
-    int n = taxonSet.size();
-    TaxonSet z(n);
-    for(int i=0;i<n;i++)
-      z.set(i,(*this)[i] & x[i]);
-    return z;
-  }
-  TaxonSet operator|(const TaxonSet& x) const {
-    int n = taxonSet.size();
-    TaxonSet z(n);
-    for(int i=0;i<n;i++)
-      z.set(i,(*this)[i] | x[i]);
-    return z;
-  }
-  bool operator==(const TaxonSet& x) const {
-    if(x.size() != size())
-      return false;
-    for(int i=0;i<size();i++)
-      if(x.get(i) != taxonSet[i])
-	return false;
-    return true;
-  }
-  bool operator!=(const TaxonSet& x) const {
-    if(x.size() != size())
-      return true;
-    for(int i=0;i<size();i++)
-      if(x.get(i) != taxonSet[i])
-	return true;
-    return false;
-  }
-  // operator< needs to partially sort TaxonSet so that subsets precede supersets.
-  // I will do this by sorting by the number of elements in the set
-
-  // old subset definition does not work for sorting as needed
-  //  bool operator<(const TaxonSet x) const { return ( (*this) == (x & (*this)) ? true : false ); }
-
-  bool operator<(const TaxonSet x) const { return ( num() < x.num() ); }
-  bool operator>(const TaxonSet x) const { return ( (*this) == (x | (*this)) ? true : false ); }
-  bool isSubsetOf(const TaxonSet x) { return ( (*this) == (x & (*this)) ? true : false ); }
-  bool isSupersetOf(const TaxonSet x) { return ( (*this) == (x | (*this)) ? true : false ); }
-private:
-  vector<bool> taxonSet;
-  double weight;
-};
-
-// Split is a class that assumes 32 or fewer taxa
-// This function is temporary until I replace Split with TaxonSet.
-// Currently, splits are represented by the part containing the first taxon.
-// We will instead represent a taxon set for a split as the taxa excluding an outgroup,
-//   presumed to be the last taxon.
-TaxonSet::TaxonSet(Split s) {
-  int numTaxa = s.getNumTaxa();
-  taxonSet.resize(numTaxa);
-  setWeight(s.getWeight());
-  int c = s.getClade(); // integer representation of the clade
-  for(int i=0;i<numTaxa;i++) {
-    if(c % 2 == 1)
-      set(i);
-    c >>= 1;
-  }
-  if(!all() && taxonSet[numTaxa-1])
-    flip();
-}
 
 class ConcordanceEdge;
 
 class ConcordanceNode {
  public:
   ConcordanceNode(int numTaxa,int i,int numGenes) {
-    taxonSet.setNumTaxa(numTaxa);
-    taxonSet.set(i);
-    taxonSet.setWeight(numGenes);
+    taxonSet = TaxonSet::getTaxaWithInitialValue(i, numGenes);
     leaf = true;
     number = minTaxa = i;
   }
-  ConcordanceNode(TaxonSet ts,int num) { 
+  ConcordanceNode(TaxonSet ts,int num) {
     taxonSet = ts;
     leaf = ts.leaf();
     number = num;
@@ -893,7 +679,7 @@ void ConcordanceTree::setMinTaxa() {
 //     except for the last taxon set in the list which is all of the taxa (and the root of the concordance tree)
 
 ConcordanceTree::ConcordanceTree(vector<TaxonSet> ts,int numGenes) {
-  numTaxa = ts.front().size();
+  numTaxa = ts.front().getNumTaxa();
   // create ConcordanceNodes for the leaves
   for(int i=0;i<numTaxa;i++)
     nodes.push_back(new ConcordanceNode(numTaxa,i,numGenes));
@@ -923,7 +709,8 @@ void ConcordanceTree::printFull(ostream& f) {
   f << "  Number Degree Subset (Edge,Neighbor)" << endl;
   for(vector<ConcordanceNode*>::iterator n=nodes.begin();n!=nodes.end();n++) {
     f << setw(8) << (*n)->getNumber() << setw(7) << (*n)->getDegree() << " ";
-    f << (*n)->getTaxonSet().getString();
+    TaxonSet t = (*n)->getTaxonSet();
+    f << t;
     for(int i=0;i<(*n)->getDegree();i++) {
       ConcordanceEdge* e = (*n)->getEdge(i);
       f << " (" << e->getNumber() << "," << e->getOtherNode(*n)->getNumber() << ")";
@@ -1093,7 +880,7 @@ private:
 
 class RunParameters {
 public:
-  RunParameters() : 
+  RunParameters() :
     alphaMultiplier(10.0),
     seed1(1234),
     seed2(5678),
@@ -1249,7 +1036,7 @@ class GenomewideDistribution {
     genomewideCredibilityInterval.clear();
   }
   double getPriorProbability(){return priorProbability;}
-  void updatePriorProbability(Split s){
+  void updatePriorProbability(TaxonSet s){
     s.updatePriorProbability();
     priorProbability = s.getPriorProbability();
     samplewidePosteriorMean = s.getWeight()/(samplewide.size()-1.0);
@@ -1269,7 +1056,7 @@ class GenomewideDistribution {
   vector<double> samplewide;
   vector<double> genomewide;
   double genomewidePosteriorMean,samplewidePosteriorMean, samplewidePosteriorMeanSD;
-  vector<double> samplewideCredibilityInterval, genomewideCredibilityInterval; 
+  vector<double> samplewideCredibilityInterval, genomewideCredibilityInterval;
   // vectors of size 6: lo(99%), lo(95%), lo(90%), hi(90%), hi(95%), hi(99%).
 };
 
@@ -1302,7 +1089,7 @@ void GenomewideDistribution::printfull(){
       for (int j=0;j<samplewide.size();j++)
 	cerr << setw(8) << setprecision(2) << convolutionWeight[i][j] ;
       cerr << endl;
-    } 
+    }
     if (i==10) cerr<<"..."<<endl;
   }
   cerr << endl;
@@ -1344,13 +1131,13 @@ class TaxonList {
 	  numberGenes[taxid[i][j]-1]++;
 	else
 	  cerr << "Warning: taxon ID ("<<taxid[i][j]
-	       <<") exceeded the expected max Taxon number."<<endl;   
+	       <<") exceeded the expected max Taxon number."<<endl;
       }
     }
     for (int j=0; j<Ntax; j++)
       if (numberGenes[j]<taxid.size())
 	isMissingOne[j]=true;
-      else 
+      else
 	isMissingOne[j]=false;
   }
   vector<vector<bool> > getAvailabilityMatrix(vector<vector<int> >& taxid); //fixit: for later may be
@@ -1397,7 +1184,7 @@ class TaxonList {
   vector<bool> isMissingOne; // is the taxon missing for at least one gene?
   vector<bool> include;      // should the taxon be included in the analysis?
   vector<int> numberGenes;   // how many genes have a sequence for this taxon?
-  vector<int> alleleOf;      // if not an allele: 0. Otherwise: ID of the individual 
+  vector<int> alleleOf;      // if not an allele: 0. Otherwise: ID of the individual
 };
 
 
