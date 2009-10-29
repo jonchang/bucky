@@ -18,7 +18,9 @@
 // Version 1.1 released 30 October, 2006
 // Version 1.2a 21 August, 2007
 // Version 1.2b 17 January, 2008
-// Version 1.3.0  6 January, 2009
+// Version 1.3.a  6 January, 2009
+// Version 1.3.0 27 May,     2009
+// Version 1.3.1 29 October, 2009
 
 // File:     bucky.C
 
@@ -96,8 +98,8 @@
 #include "bucky.h"
 
 using namespace std;
-string VERSION = "1.3.0";
-string DATE = "27 May 2009";
+string VERSION = "1.3.1";
+string DATE = "29 October 2009";
 string COPYRIGHT = "Copyright (C) 2006-2008 by Bret Larget and Cecile Ane";
 
 //
