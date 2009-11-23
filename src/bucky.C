@@ -289,14 +289,12 @@ bool readFile(string filename, int i, vector<string> &topologies, vector<vector<
   }
 
   map<int, int> translateID;
-  map<int, bool> toRemove;
-  mbsumtree::Pruner* thePruner;
   // in case the numbers in the translate table are not from 1 to Ntax
   // translateID[i] = ID given to the taxon on line i+1 in the gene file
 
   string keyword;
   int numTaxa=translateMap.size();
-
+  mbsumtree::Pruner* thePruner = new BuckyPruner(numTaxa);
   int lineNum = 1;
   if (hasTtable){
   // read the gene's translate table
@@ -330,15 +328,14 @@ bool readFile(string filename, int i, vector<string> &topologies, vector<vector<
         translateID[taxonnumber] = taxonid;
         taxid.push_back(taxonid);
       }
-      else {
-        toRemove[taxonnumber] = 1;
-      }
     }
     numTaxa=taxid.size();
-    thePruner = new TTPruner(toRemove);
   }
   else {
-    thePruner = new NTTPruner(numTaxa);
+    taxid.resize(numTaxa);
+    for (int i = 0; i < numTaxa; i++) {
+      taxid[i] = i + 1;
+    }
   }
 
   // set zeros for ith row of table
@@ -349,24 +346,6 @@ bool readFile(string filename, int i, vector<string> &topologies, vector<vector<
     f >> top >> weight;
     if(f.fail())
       break;
-
-    // count taxa
-    int taxaCount = countTaxa(top);
-    if(taxaCount != numTaxa) {
-      top = pruneTop(top, lineNum, thePruner);
-      taxaCount = numTaxa;
-      assert(countTaxa(top) == numTaxa);
-    }
-    if (!hasTtable) {
-      taxid.resize(numTaxa);
-      for (int i = 0; i < numTaxa; i++) {
-        taxid[i] = i + 1;
-      }
-    }
-
-    // determine longest length of topology string
-    if(top.length()>max)
-      max = top.length();
 
     // replace taxon numbers by taxid in the topology
     if (hasTtable){
@@ -383,15 +362,25 @@ bool readFile(string filename, int i, vector<string> &topologies, vector<vector<
 	else {
 	  itop >> z;
 	  int taxonid = translateID[z];
-	  if (taxonid == 0){  //find row # that has taxon ID z in the gene file
-	    cerr << "Error mapping taxanum " << z << " in file " << filename << endl;
-	    exit(0);
-	  }
+	  // if translate table does not have mapping for z we replace it by zero
+	  // and zeroes will be pruned later.
 	  otop << taxonid;
 	}
       } while(c != ';' && c != EOF && itop.good());
       top = otop.str();
     }
+
+    // count taxa
+    int taxaCount = countTaxa(top);
+    if(taxaCount != numTaxa) {
+      top = pruneTop(top, lineNum, thePruner);
+      taxaCount = numTaxa;
+      assert(countTaxa(top) == numTaxa);
+    }
+
+    // determine longest length of topology string
+    if(top.length()>max)
+      max = top.length();
 
     // check if topology has already been read
     int n = find(topologies.begin(),topologies.end(),top) - topologies.begin();

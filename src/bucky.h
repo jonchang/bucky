@@ -1190,29 +1190,15 @@ class TaxonList {
   vector<int> alleleOf;      // if not an allele: 0. Otherwise: ID of the individual
 };
 
-// Pruner if translateTable is present.
-class TTPruner : public mbsumtree::Pruner{
+// Bucky Pruner
+class BuckyPruner : public mbsumtree::Pruner {
 public:
-  TTPruner(map<int, bool>& taxaToIgnore) {
-    tToIgnore = taxaToIgnore;
-  }
-
-  virtual bool prune(int num) {
-    return tToIgnore[num];
-  }
-private:
-  map<int, bool> tToIgnore;
-};
-
-// Pruner if translateTable is not present.
-class NTTPruner : public mbsumtree::Pruner {
-public:
-  NTTPruner(int maxTaxa) {
+  BuckyPruner(int maxTaxa) {
     mTaxa = maxTaxa;
   }
 
   virtual bool prune(int num) {
-    return num > mTaxa;
+    return num <= 0 || num > mTaxa;
   }
 private:
   int mTaxa;
