@@ -11,7 +11,7 @@
 #include <algorithm>
 #include "boost/dynamic_bitset.hpp"
 #include "TaxonSet.h"
-
+#include "mbsumtree.h"
 using namespace std;
 
 class Rand {
@@ -927,6 +927,8 @@ public:
   void setCreateSingleFile(bool x) { createSingleFile = x; }
   double getSwCFcutoff() { return  swCFcutoff; }
   void   setSwCFcutoff(double x) { swCFcutoff = x; }
+  string getPruneFile() { return pruneFile; }
+  void setPruneFile(string pFile) { pruneFile = pFile; }
 private:
   double alphaMultiplier,swCFcutoff;  // cutoff on sample-wide CF to display splits
   unsigned int seed1,seed2,numUpdates,subsampleRate,numRuns,numChains,mcmcmcRate,numGenomewideGrid;
@@ -935,6 +937,7 @@ private:
   bool createSampleFile;
   bool createJointFile;
   bool createSingleFile;
+  string pruneFile;
 };
 
 class Defaults {
@@ -1187,7 +1190,31 @@ class TaxonList {
   vector<int> alleleOf;      // if not an allele: 0. Otherwise: ID of the individual
 };
 
+// Pruner if translateTable is present.
+class TTPruner : public mbsumtree::Pruner{
+public:
+  TTPruner(map<int, bool>& taxaToIgnore) {
+    tToIgnore = taxaToIgnore;
+  }
 
+  virtual bool prune(int num) {
+    return tToIgnore[num];
+  }
+private:
+  map<int, bool> tToIgnore;
+};
 
+// Pruner if translateTable is not present.
+class NTTPruner : public mbsumtree::Pruner {
+public:
+  NTTPruner(int maxTaxa) {
+    mTaxa = maxTaxa;
+  }
+
+  virtual bool prune(int num) {
+    return num > mTaxa;
+  }
+private:
+  int mTaxa;
+};
 #endif
-

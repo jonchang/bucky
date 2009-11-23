@@ -18,9 +18,8 @@
 // Version 1.1 released 30 October, 2006
 // Version 1.2a 21 August, 2007
 // Version 1.2b 17 January, 2008
-// Version 1.3.a  6 January, 2009
-// Version 1.3.0 27 May,     2009
-// Version 1.3.1 29 October, 2009
+// Version 1.3.0  27 May, 2009
+// Version 1.3.1  29 October, 2009
 
 // File:     bucky.C
 
@@ -94,13 +93,182 @@
 #include <cmath>
 #include <ctime>
 #include <limits>
-
+#include <map>
+#include <set>
 #include "bucky.h"
+#include "mbsumtree.h"
 
 using namespace std;
 string VERSION = "1.3.1";
 string DATE = "29 October 2009";
 string COPYRIGHT = "Copyright (C) 2006-2008 by Bret Larget and Cecile Ane";
+
+int countTaxa(string top) {
+  int countTaxa=0;
+  istringstream s(top);
+  char c;
+  int z;
+  do {
+    c = s.peek();
+    if(!isdigit(c))
+      s >> c;
+    else {
+      s >> z;
+      countTaxa++;
+    }
+  } while(c != ';' && c != EOF && s.good());
+
+  return countTaxa;
+}
+
+bool getTaxa(string& file, set<string>& taxaInIFile, map<string, int>& translateMap) {
+  ifstream f(file.c_str());
+  if(f.fail()) {
+    cerr <<"Error: Cannot open file " << file << "." << endl;
+    exit(1);
+  }
+
+  // search for the gene's translate table
+  bool hasTtable = false;
+
+  string keyword;
+  f >> keyword;
+  if(keyword=="translate" || keyword=="TRANSLATE" || keyword=="Translate") {
+    hasTtable =true;
+    // read the gene's translate table
+    string taxonname;
+    int taxonnumber;
+    bool done=false;  // will be done when semicolon is reached
+    while(f.good() && !f.eof() && !done){
+      f >> taxonnumber >> taxonname;
+      if(f.fail()){
+        cerr << "Error in reading the translate table for file "<< file <<endl;
+        exit(1);
+      }
+      size_t pos=taxonname.rfind(",");
+      if (pos!=string::npos)
+        taxonname.replace(pos,1,"");
+      else {
+        pos = taxonname.rfind(";");
+        if (pos!=string::npos){
+          taxonname.replace(pos,1,"");
+          done=true;
+        }
+        else {
+          f >> keyword; // take out the comma
+          if (keyword==";") done=true;
+        }
+      }
+
+      taxaInIFile.insert(taxonname);
+      if (!translateMap[taxonname]) {
+        translateMap[taxonname] = translateMap.size();
+      }
+
+    }
+  }
+  else {
+    string top = keyword; //if there is no translate table, first sentence is assumed to be topology string
+    int taxaCount = countTaxa(top);
+    for (int i=0; i<taxaCount; i++){
+      ostringstream s;
+      s << "taxon" << i+1;
+      string as = s.str();
+      translateMap[as] = i + 1;
+      taxaInIFile.insert(as);
+    }
+  }
+
+  f.close();
+  return hasTtable;
+
+}
+
+bool getTaxaSubset(vector<string> inputFiles, vector<bool>& hasTtable, map<string, int>& prunedTranslateMap, vector<string>& translateTable, string pruneFile) {
+  map<string, int> translateMap;
+  set<string> taxaNames;
+  size_t fileNum = 1;
+  bool allno = true;
+  bool oneno = false;
+  unsigned int maxTaxa = 0;
+  if (!pruneFile.empty()) {
+    getTaxa(pruneFile, taxaNames, translateMap);
+    fileNum = 0;
+    maxTaxa = taxaNames.size();
+  }
+  else {
+    hasTtable[0] = getTaxa(inputFiles[0], taxaNames, translateMap);
+    if (!hasTtable[0])
+      oneno=true;
+    else
+      allno = false;
+  }
+  for (;fileNum<inputFiles.size();fileNum++) {
+    set<string> taxaInIFile;
+    hasTtable[fileNum] = getTaxa(inputFiles[fileNum], taxaInIFile, translateMap);
+    if (!hasTtable[fileNum])
+      oneno=true;
+    else
+      allno = false;
+
+    set<string> output;
+    set_intersection(taxaNames.begin(), taxaNames.end(), taxaInIFile.begin(), taxaInIFile.end(), inserter(output, output.begin()));
+    taxaNames = output;
+    if (taxaNames.size() < maxTaxa) {
+      cerr << "\nCannot prune to taxa subset specified in " << pruneFile << endl;
+      cerr << inputFiles[fileNum] << " does not have all taxa specified in the prune file" << endl;
+      exit(0);
+    }
+  }
+
+  // warning if genes do not all have translate tables
+  if (oneno && !allno){ // some genes have a table, but not all
+    cout << "\nWarning! the following files had no translate table:"<<endl;
+    for (size_t i=0;i<inputFiles.size();i++)
+      if (hasTtable[i]==0)
+        cout << inputFiles[i] << endl;
+    cout <<endl;
+  }
+  if (allno){
+    cout << "\nWarning! none of the loci had a translate table."<<endl;
+  }
+
+  // Give ids to all taxa left after intersection.
+  // Make sure these numbers fall in continuous range.
+  // if a taxa ti is given number 33 before and taxa 32 gets pruned ti should get 32 now.
+  vector<string> unmappedTaxa;
+  int taxaCnt = taxaNames.size();
+  translateTable.resize(taxaCnt);
+  for (set<string>::iterator itr = taxaNames.begin(); itr != taxaNames.end();itr++) {
+    int num = translateMap[*itr];
+    translateMap.erase(*itr);
+    if (num <= taxaCnt) {
+      prunedTranslateMap[*itr] = num;
+      translateTable[num - 1] = *itr;
+    }
+    else {
+      unmappedTaxa.push_back(*itr);
+    }
+  }
+
+  int i = 0;
+  for (map<string, int>::iterator itr = translateMap.begin(); itr != translateMap.end(); itr++) {
+    if (itr->second <= taxaCnt) {
+      prunedTranslateMap[unmappedTaxa[i]] = itr->second;
+      translateTable[itr->second - 1] = unmappedTaxa[i];
+      i++;
+    }
+  }
+
+  return oneno;
+}
+
+string pruneTop(string top, int lineNum, mbsumtree::Pruner* p) {
+  mbsumtree::Tree t(top, lineNum, p);
+  ostringstream newtop;
+  t.printTop(newtop);
+  return newtop.str();
+}
 
 //
 // readFile
@@ -112,7 +280,7 @@ string COPYRIGHT = "Copyright (C) 2006-2008 by Bret Larget and Cecile Ane";
 // when new topologies are discovered, add a new column to the table
 
 bool readFile(string filename, int i, vector<string> &topologies, vector<vector<double> > &table, int &max,
-	     vector<int>& taxid, vector<string>& translateTable)
+              vector<int>& taxid, map<string, int>& translateMap, bool hasTtable)
 {
   ifstream f(filename.c_str());
   if(f.fail()) {
@@ -120,22 +288,16 @@ bool readFile(string filename, int i, vector<string> &topologies, vector<vector<
     exit(1);
   }
 
-  // search for the gene's translate table
-  bool hasTtable = false;
-  bool useTranslateID = false;
-  vector<int> translateID;
+  map<int, int> translateID;
+  map<int, bool> toRemove;
+  mbsumtree::Pruner* thePruner;
   // in case the numbers in the translate table are not from 1 to Ntax
   // translateID[i] = ID given to the taxon on line i+1 in the gene file
 
   string keyword;
-  f >> keyword;
-  if(keyword=="translate" || keyword=="TRANSLATE" || keyword=="Translate")
-    hasTtable=true;
-  f.close();
+  int numTaxa=translateMap.size();
 
-  int numTaxa=-1;
-
-  f.open(filename.c_str());
+  int lineNum = 1;
   if (hasTtable){
   // read the gene's translate table
     string taxonname;
@@ -148,7 +310,7 @@ bool readFile(string filename, int i, vector<string> &topologies, vector<vector<
 	cerr << "Error in reading the translate table for gene "<<i<<endl;
 	exit(1);
       }
-      translateID.push_back(taxonnumber);
+      lineNum++;
       size_t pos=taxonname.rfind(",");
       if (pos!=string::npos)
 	taxonname.replace(pos,1,"");
@@ -163,24 +325,20 @@ bool readFile(string filename, int i, vector<string> &topologies, vector<vector<
 	  if (keyword==";") done=true;
 	}
       }
-      int taxonid = 0;
-      for (int i=0; i<translateTable.size(); i++)
-	if (taxonname == translateTable[i]){
-	  taxonid = i+1;
-	  taxid.push_back(i+1);
-	  break;
-	}
-      if (taxonid==0){ // new taxon
-	translateTable.push_back(taxonname);
-	taxid.push_back(translateTable.size());
+      int taxonid = translateMap[taxonname];
+      if (taxonid != 0){
+        translateID[taxonnumber] = taxonid;
+        taxid.push_back(taxonid);
+      }
+      else {
+        toRemove[taxonnumber] = 1;
       }
     }
     numTaxa=taxid.size();
-    for (int i=0; i<numTaxa; i++)
-      if (translateID[i]!=i+1){
-	useTranslateID=true;
-	break;
-      }
+    thePruner = new TTPruner(toRemove);
+  }
+  else {
+    thePruner = new NTTPruner(numTaxa);
   }
 
   // set zeros for ith row of table
@@ -188,47 +346,22 @@ bool readFile(string filename, int i, vector<string> &topologies, vector<vector<
   while(f.good() && !f.eof()) {
     string top;
     double weight;
-    bool done;
     f >> top >> weight;
     if(f.fail())
       break;
-    else
-      done = false;
 
     // count taxa
-    int countTaxa=0;
-    if(!done) {
-      istringstream s(top);
-      char c;
-      int z;
-      do {
-	c = s.peek();
-	if(!isdigit(c))
-	  s >> c;
-	else {
-	  s >> z;
-	  countTaxa++;
-	}
-      } while(c != ';' && c != EOF && s.good());
-      if(numTaxa == -1){ // no translate table was found and first tree was read
-	numTaxa = countTaxa;
-	taxid.resize(countTaxa);
-	for (int i=0; i<countTaxa; i++)
-	  taxid[i]=i+1; // assumes IDs are 1,2,...,Ntax.
-	if (translateTable.size()==0){ // then build the overall translate table
-	  for (int i=0; i<countTaxa; i++){
-	    ostringstream s;
-	    s << "taxon" << i+1;
-	    translateTable.push_back(s.str());
-	  }
-	}
+    int taxaCount = countTaxa(top);
+    if(taxaCount != numTaxa) {
+      top = pruneTop(top, lineNum, thePruner);
+      taxaCount = numTaxa;
+      assert(countTaxa(top) == numTaxa);
+    }
+    if (!hasTtable) {
+      taxid.resize(numTaxa);
+      for (int i = 0; i < numTaxa; i++) {
+        taxid[i] = i + 1;
       }
-      else if(countTaxa != numTaxa) {
-	cerr << "Error: File " << filename << " with line " << top << " " << weight << " has " << countTaxa
-			    << " taxa where " << numTaxa << " are expected." << endl;
-	exit(1);
-      }
-      done = true;
     }
 
     // determine longest length of topology string
@@ -249,15 +382,12 @@ bool readFile(string filename, int i, vector<string> &topologies, vector<vector<
 	}
 	else {
 	  itop >> z;
-	  if (useTranslateID){  //find row # that has taxon ID z in the gene file
-	    for (int i=0; i<numTaxa; i++)
-	      if (translateID[i]==z){
-		otop << taxid[i];
-		break;
-	      }
+	  int taxonid = translateID[z];
+	  if (taxonid == 0){  //find row # that has taxon ID z in the gene file
+	    cerr << "Error mapping taxanum " << z << " in file " << filename << endl;
+	    exit(0);
 	  }
-	  else
-	    otop << taxid[z-1];
+	  otop << taxonid;
 	}
       } while(c != ';' && c != EOF && itop.good());
       top = otop.str();
@@ -271,8 +401,10 @@ bool readFile(string filename, int i, vector<string> &topologies, vector<vector<
 	table[k].push_back(0);
     }
     table[i][n] = weight;
+    lineNum++;
   }
   f.close();
+  delete thePruner;
   return hasTtable;
 }
 
@@ -757,6 +889,7 @@ void usage(Defaults defaults)
   cerr << "  use independence prior | --use-independence-prior   | " << (defaults.getUseIndependencePrior() == true ? "true" : "false") << endl;
   cerr << "  calculate pairs        | --calculate-pairs          | " << (defaults.getCalculatePairs() == true ? "true" : "false") << endl;
   cerr << "  use update groups      | --use-update-groups        | " << (defaults.getUseUpdateGroups() == true ? "true" : "false") << endl;
+  cerr << "  prune file             | -p fileNameWithTaxaSubset  |" << endl;
   cerr << "  use update groups      | --do-not-use-update-groups |" << endl;
   cerr << "  help                   | -h OR --help               |" << endl;
   cerr << "  version                | --version                  |" << endl;
@@ -786,6 +919,7 @@ void showParameters(ostream& f,FileNames& fn,Defaults defaults,ModelParameters& 
   f << "  use independence prior | --use-independence-prior | " << left << setw(14) << (defaults.getUseIndependencePrior() == true ? "true" : "false") << "| " << (mp.getUseIndependencePrior() ? "true" : "false") << endl;
   f << "  calculate pairs        | --calculate-pairs        | " << left << setw(14) << (defaults.getCalculatePairs() == true ? "true" : "false")       << "| " << (rp.getCalculatePairs() ? "true" : "false" ) << endl;
   f << "  use update groups      | --use-update-groups      | " << left << setw(14) << (defaults.getUseUpdateGroups() == true ? "true" : "false")      << "| " << (rp.getUseUpdateGroups() ? "true" : "false")<< endl;
+  f << "  File with prune list   | -p pruneFile             | " << left << setw(14) << ""                                                              << "| " << rp.getPruneFile() << endl;
   f << "  ------------------------------------------------------------------------------" << endl;
 }
 
@@ -974,6 +1108,10 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
       rp.setUseUpdateGroups(false);
       k++;
     }
+    else if (flag =="-p") {
+      rp.setPruneFile(argv[++k]);
+      k++;
+    }
     else
       done = true;
   }
@@ -1002,30 +1140,24 @@ void readInputFileList(string inputListFileName, vector<string>& inputFiles) {
 }
 
 bool readInputFiles(vector<string>& inputFiles,vector<vector<double> >& table, vector<string>& translateTable,
-		    vector<string>& topologies,int& max, ostream& fout, vector<vector<int> >& taxid)
+                    vector<string>& topologies,int& max, ostream& fout, vector<vector<int> >& taxid, string prunefile)
 {
   vector<bool> hasTtable(inputFiles.size());
-  bool allno = true;
-  bool oneno = false;
-  for (size_t i=0;i<inputFiles.size();i++){
-    hasTtable[i] = readFile(inputFiles[i],i,topologies,table,max,taxid[i],translateTable);
-    if (hasTtable[i]==0)
-      oneno=true;
-    else
-      allno = false;
+  map<string, int> translateMap;
+  bool oneno = getTaxaSubset(inputFiles, hasTtable, translateMap, translateTable, prunefile);
+  if (translateTable.size() < 4) {
+    cerr << "Too few taxa (" << translateTable.size() << ") left after pruning process, Taxa common to all genes:" << endl;
+    for (map<string,int>::iterator itr = translateMap.begin(); itr != translateMap.end(); itr++) {
+      cerr << itr->first << "  ";
+    }
+    cerr << endl;
+    exit(0);
   }
 
-  // warning if genes do not all have translate tables
-  if (oneno && !allno){ // some genes have a table, but not all
-      cout << "\nWarning! the following files had no translate table:"<<endl;
-      for (size_t i=0;i<inputFiles.size();i++)
-	if (hasTtable[i]==0)
-	  cout << inputFiles[i] << endl;
-      cout <<endl;
+  for (size_t i=0;i<inputFiles.size();i++){
+    readFile(inputFiles[i],i,topologies,table,max,taxid[i],translateMap, hasTtable[i]);
   }
-  if (allno){
-      cout << "\nWarning! none of the loci had a translate table."<<endl;
-  }
+
   return(oneno);
 }
 
@@ -1695,7 +1827,7 @@ int main(int argc, char *argv[])
   vector<string> topologies;
   int max=0;
   int numTaxa;
-  vector<string> translateTable(0);
+  vector<string> translateTable;
   vector<vector<int> > taxid(numGenes);
 
   // Open outfile to save all window output
@@ -1719,7 +1851,7 @@ int main(int argc, char *argv[])
 
   cout << "Reading in summary files...." << flush;
   fout << "Reading in summary files...." << flush;
-  bool missingTtable = readInputFiles(inputFiles,table,translateTable,topologies,max,fout,taxid);
+  bool missingTtable = readInputFiles(inputFiles,table,translateTable,topologies,max,fout,taxid, rp.getPruneFile());
   numTaxa = translateTable.size();
   cout << "done." << endl;
 
