@@ -370,14 +370,7 @@ bool readFile(string filename, int i, vector<string> &topologies, vector<vector<
       top = otop.str();
     }
 
-    // count taxa
-    int taxaCount = countTaxa(top);
-    if(taxaCount != numTaxa) {
       top = pruneTop(top, lineNum, thePruner);
-      taxaCount = numTaxa;
-      assert(countTaxa(top) == numTaxa);
-    }
-
     // determine longest length of topology string
     if(top.length()>max)
       max = top.length();
@@ -1358,7 +1351,7 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
 		 int numGenes,RunParameters& rp,ModelParameters& mp,vector<vector<int> >& newTable,
 		 vector<vector<int> >& clusterCount, vector<TaxonSet>& splits,  vector<vector<vector<int> > >& splitsGeneMatrix,
 		 vector<vector<int> >& pairCounts,   vector<Gene*>& genes, vector<double>& alphas,
-		 vector<vector<int> >& mcmcmcAccepts,vector<vector<int> >& mcmcmcProposals)
+		 vector<vector<int> >& mcmcmcAccepts,vector<vector<int> >& mcmcmcProposals, vector<string>& translateTable)
 {
   // .joint
   if(rp.getCreateJointFile()) {
@@ -1584,6 +1577,20 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
 
   sort(tset.begin(),tset.end());
   tset.push_back(TaxonSet::get());
+
+  concordanceStr << "translate" << endl;
+  int taxaNum = 1;
+  int taxaSize = translateTable.size();
+  for (vector<string>::iterator itr = translateTable.begin(); itr != translateTable.end(); itr++) {
+    concordanceStr << taxaNum << " " << *itr;
+    if (taxaNum < taxaSize)
+      concordanceStr << ",";
+    else
+      concordanceStr << ";";
+
+    concordanceStr << "\n";
+    taxaNum++;
+  }
 
   ConcordanceTree z(tset,numGenes);
   concordanceStr << "Primary Concordance Tree Topology:" << endl;
@@ -2229,7 +2236,7 @@ int main(int argc, char *argv[])
 
   writeOutput(fout,fileNames,max,numTrees,numTaxa,topologies,numGenes,rp,mp,
 	      newTable,clusterCount,splits,splitsGeneMatrix,
-	      pairCounts,genes,alphas,mcmcmcAccepts,mcmcmcProposals);
+	      pairCounts,genes,alphas,mcmcmcAccepts,mcmcmcProposals, translateTable);
 
   for(int i=0;i<numGenes;i++)
     delete genes[i];
