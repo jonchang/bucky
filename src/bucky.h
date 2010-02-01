@@ -14,6 +14,7 @@
 #include "mbsumtree.h"
 using namespace std;
 
+static double LOG_ZERO = log(0);
 class Rand {
 /*
  *  Mathlib : A C Library of Special Functions
@@ -172,7 +173,8 @@ bool cmpPickNodes(PickNode* x,PickNode* y) { return( x->getTotal() > y->getTotal
 class Gene {
 public:
   Gene(int n, vector<double> x, vector<int> taxid) {
-    probs.resize(x.size(),0);
+    probs.resize(x.size(),LOG_ZERO);
+    hasNonZeroProb.resize(x.size(), false);
     number = n;
     for (int i=0; i<taxid.size(); i++)
       taxonID.push_back(taxid[i]);
@@ -188,8 +190,10 @@ public:
 	pnodes.push_back(new PickNode(i,x[i]));
       }
     // added for faster probability retrieval
-    for(int i=0;i<indices.size();i++)
-      probs[indices[i]] = counts[i] / total;
+    for(int i=0;i<indices.size();i++) {
+      probs[indices[i]] = log(counts[i] / total);
+      hasNonZeroProb[indices[i]] = true;
+    }
     // code to create the pnode tree
     pnodes.sort(cmpPickNodes);
     if(pnodes.size()==1)
@@ -236,7 +240,13 @@ public:
   int pickTreeFast(Rand& r) const {
     return root->pick(total * r.runif());
   }
+
+  // Can return log(0) if the gene prior does not have top.
+  // Use this in combination with hasProb to not get log(0)
   double getProb(int top) const { return probs[top]; }
+
+  bool hasProb(int top) const { return hasNonZeroProb[top]; }
+
 //  double getProb(int top) const {
 //    int i=0;
 //    while(indices[i]!=top && i<indices.size())
@@ -292,6 +302,7 @@ private:
   vector<double> counts;    // length is the number of topologies with positive probability
   vector<double> probs;     // length is the number of trees in the whole data set
                             // added to make the retrieval of probability information very fast (at the cost of space)
+  vector<bool> hasNonZeroProb;  // added to check if probs is valid. If counts[i] = 0, probs[i]=log(0) and isCountZero[i] = true
   vector<int> taxonID;      // taxon IDs in the overall translate table
   PickNode* root;
   list<PickNode*> pnodes;   // length is the number of topologies with positive probability
@@ -369,7 +380,7 @@ public:
     //logHR -= log(n1-1 + alphaOverTop);
     logPriorProb += logHR;
     if(i < genes.size())
-      logPosteriorProbProduct += (log(genes[i]->getProb(newTop)) - log(genes[i]->getProb(oldTop)));
+      logPosteriorProbProduct += (genes[i]->getProb(newTop) - genes[i]->getProb(oldTop));
 
   }
   double getLogPriorProb() { return logPriorProb; }
@@ -378,7 +389,7 @@ public:
   double calculateLogPosteriorProbProduct() {
     logPosteriorProbProduct = 0;
     for(int i=0;i<genes.size();i++)
-      logPosteriorProbProduct += log(genes[i]->getProb(tops[i]));
+      logPosteriorProbProduct += genes[i]->getProb(tops[i]);
     return logPosteriorProbProduct;
   }
   double getLogH() { return logPriorProb + logPosteriorProbProduct; }

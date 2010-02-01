@@ -240,7 +240,7 @@ Tree::Tree(string line,int lineNumber, Pruner* aPruner):thePruner(aPruner)
       if(s.eof() || s.fail()) {
         cerr << "Error: Tree on line " << lineNumber << " ended while reading in subtree beginning with left parenthesis number "
         << numLeft << "." << endl;
-        exit(1);
+        exit(0);
       }
       else if(c==',') // read in another subtree to the root.
         continue;
@@ -251,12 +251,32 @@ Tree::Tree(string line,int lineNumber, Pruner* aPruner):thePruner(aPruner)
         break;
       }
     }
-    if (b) { // if all of subtrees are pruned dont add n to the nodes list.
-      nodes.insert(nodes.begin(), n);
-      numNodes++;
+    if (n->getNumEdges() == 1) { // if root only has one child, then remove root, make child new root
+      Edge *edge = n->getEdge(0);
+      Node *child = edge->getOtherNode(n);
+      for (vector<Node *>::iterator itr = nodes.begin(); itr != nodes.end();) {
+        if (*itr == child) {
+          nodes.erase(itr);
+        }
+        else
+          itr++;
+      }
+      nodes.insert(nodes.begin(), child);
+      child->removeEdge(edge);
+      numEdges--;
+      delete n;
+      for (vector<Edge *>::iterator itr = edges.begin(); itr != edges.end();) {
+        if (*itr == edge) {
+          edges.erase(itr);
+        }
+        else
+          itr++;
+      }
+      delete edge;
     }
     else {
-      delete n;
+      nodes.insert(nodes.begin(), n);
+      numNodes++;
     }
   }
   else if(isdigit(c)) { // base tree may just be a single node

@@ -142,7 +142,7 @@ bool getTaxa(string& file, set<string>& taxaInIFile, map<string, int>& translate
     while(f.good() && !f.eof() && !done){
       f >> taxonnumber >> taxonname;
       if(f.fail()){
-        cerr << "Error in reading the translate table for file "<< file <<endl;
+        cerr << "Error in reading the translate table for file: "<< file << ". This is probably because of incorrect format of translate table. Please make sure it ends with a ';'." <<endl;
         exit(1);
       }
       size_t pos=taxonname.rfind(",");
@@ -344,8 +344,16 @@ bool readFile(string filename, int i, vector<string> &topologies, vector<vector<
     string top;
     double weight;
     f >> top >> weight;
-    if(f.fail())
+    if(f.fail()) {
+      if (!top.empty() && top.find("(") == string::npos) {
+        cerr << "Invalid topology string " << top << " in file:" << filename
+            <<". Please make sure translate table does not contain multiple ';'?"
+            << endl;
+
+        exit(0);
+      }
       break;
+    }
 
     // replace taxon numbers by taxid in the topology
     if (hasTtable){
@@ -370,7 +378,7 @@ bool readFile(string filename, int i, vector<string> &topologies, vector<vector<
       top = otop.str();
     }
 
-      top = pruneTop(top, lineNum, thePruner);
+    top = pruneTop(top, lineNum, thePruner);
     // determine longest length of topology string
     if(top.length()>max)
       max = top.length();
@@ -440,7 +448,7 @@ int State::updateOne(int i,Rand& rand) {
     }
     logPriorProb += logHR;
     if(i < genes.size())
-      logPosteriorProbProduct += (log(genes[i]->getProb(newTop)) - log(genes[i]->getProb(oldTop)));
+      logPosteriorProbProduct += (genes[i]->getProb(newTop) - genes[i]->getProb(oldTop));
     return 1;
   }
 }
@@ -564,17 +572,19 @@ int State::updateOneGroup(int gene,Rand& rand) {
   double newLogProb = 0.0;
   for(int i=0;i<genes.size();i++) {
     if(tops[i] == oldTop) {
-      oldLogProb += log( genes[i]->getProb(oldTop) );
+      oldLogProb += genes[i]->getProb(oldTop);
       set[j++] = i;
-      double p = genes[i]->getProb(newTop);
-	  if(p>0)
-	    newLogProb += log(p);
-	  else // acceptance probability is 0
-	    return 0;
+      if (genes[i]->hasProb(newTop))
+        newLogProb += genes[i]->getProb(newTop);
     }
   }
 
-  if(log(rand.runif()) < newLogProb - oldLogProb + genes[gene]->getProb(oldTop) - genes[gene]->getProb(newTop)) {
+  double geneNewLogProb = 0.0;
+  if (genes[gene]->hasProb(newTop)) {
+    geneNewLogProb = genes[gene]->getProb(newTop);
+  }
+
+  if(log(rand.runif()) < newLogProb - oldLogProb + genes[gene]->getProb(oldTop) - geneNewLogProb) {
     // make changes to newTop
     for(int i=0;i<set.size();i++)
       tops[set[i]] = newTop;

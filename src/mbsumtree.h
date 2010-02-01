@@ -47,6 +47,17 @@ public:
   Edge* getEdge(int n) { return edges[n]; }
   void setEdge(Edge* e) { edges.push_back(e); }
   void setEdge(Edge *e,int n) { edges[n] = e; }
+  void removeEdge(Edge* e) {
+    for (vector<Edge*>::iterator itr = edges.begin(); itr != edges.end();)
+      if (*itr == e) {
+        edges.erase(itr);
+        break;
+      }
+      else {
+        itr++;
+      }
+    }
+  void clearEdges() { edges.clear(); }
   void reorder(Edge*);
   void rootReorder();
   int getMinTaxa() { return minTaxa; }
