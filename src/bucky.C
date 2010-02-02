@@ -448,7 +448,7 @@ int State::updateOne(int i,Rand& rand) {
     }
     logPriorProb += logHR;
     if(i < genes.size())
-      logPosteriorProbProduct += (genes[i]->getProb(newTop) - genes[i]->getProb(oldTop));
+      logPosteriorProbProduct += (genes[i]->getLogProb(newTop) - genes[i]->getLogProb(oldTop));
     return 1;
   }
 }
@@ -572,19 +572,21 @@ int State::updateOneGroup(int gene,Rand& rand) {
   double newLogProb = 0.0;
   for(int i=0;i<genes.size();i++) {
     if(tops[i] == oldTop) {
-      oldLogProb += genes[i]->getProb(oldTop);
+      oldLogProb += genes[i]->getLogProb(oldTop);
       set[j++] = i;
       if (genes[i]->hasProb(newTop))
-        newLogProb += genes[i]->getProb(newTop);
+        newLogProb += genes[i]->getLogProb(newTop);
+      else // acceptance probability is 0
+        return 0;
     }
   }
 
   double geneNewLogProb = 0.0;
   if (genes[gene]->hasProb(newTop)) {
-    geneNewLogProb = genes[gene]->getProb(newTop);
+    geneNewLogProb = genes[gene]->getLogProb(newTop);
   }
 
-  if(log(rand.runif()) < newLogProb - oldLogProb + genes[gene]->getProb(oldTop) - geneNewLogProb) {
+  if(log(rand.runif()) < newLogProb - oldLogProb + genes[gene]->getLogProb(oldTop) - geneNewLogProb) {
     // make changes to newTop
     for(int i=0;i<set.size();i++)
       tops[set[i]] = newTop;

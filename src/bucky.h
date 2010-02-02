@@ -243,7 +243,7 @@ public:
 
   // Can return log(0) if the gene prior does not have top.
   // Use this in combination with hasProb to not get log(0)
-  double getProb(int top) const { return probs[top]; }
+  double getLogProb(int top) const { return probs[top]; }
 
   bool hasProb(int top) const { return hasNonZeroProb[top]; }
 
@@ -380,7 +380,7 @@ public:
     //logHR -= log(n1-1 + alphaOverTop);
     logPriorProb += logHR;
     if(i < genes.size())
-      logPosteriorProbProduct += (genes[i]->getProb(newTop) - genes[i]->getProb(oldTop));
+      logPosteriorProbProduct += (genes[i]->getLogProb(newTop) - genes[i]->getLogProb(oldTop));
 
   }
   double getLogPriorProb() { return logPriorProb; }
@@ -389,7 +389,7 @@ public:
   double calculateLogPosteriorProbProduct() {
     logPosteriorProbProduct = 0;
     for(int i=0;i<genes.size();i++)
-      logPosteriorProbProduct += genes[i]->getProb(tops[i]);
+      logPosteriorProbProduct += genes[i]->getLogProb(tops[i]);
     return logPosteriorProbProduct;
   }
   double getLogH() { return logPriorProb + logPosteriorProbProduct; }
