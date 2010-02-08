@@ -44,7 +44,7 @@ TaxonSet TaxonSet::getTaxa(int taxacnt) {
 TaxonSet TaxonSet::flip() {
   dynamic_bitset<> temp = taxa;
   temp.flip();
-  return TaxonSet(temp);
+  return TaxonSet(temp, weight);
 }
 
 void TaxonSet::updatePriorProbability() {
@@ -59,12 +59,12 @@ void TaxonSet::updatePriorProbability() {
 TaxonSet TaxonSet::excludeTaxon(int num) {
   assert (num >= 0 && num < taxa.size());
   if (!taxa[num]) {
-    return TaxonSet(taxa);
+    return TaxonSet(taxa, weight);
   }
 
   dynamic_bitset<> result(taxa);
   result = result.flip(num);
-  return TaxonSet(result);
+  return TaxonSet(result, weight);
 }
 
 unsigned int TaxonSet::minus(int num) {
