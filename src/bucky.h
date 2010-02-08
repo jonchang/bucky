@@ -173,7 +173,7 @@ bool cmpPickNodes(PickNode* x,PickNode* y) { return( x->getTotal() > y->getTotal
 class Gene {
 public:
   Gene(int n, vector<double> x, vector<int> taxid) {
-    probs.resize(x.size(),LOG_ZERO);
+    logProbs.resize(x.size(),LOG_ZERO);
     hasNonZeroProb.resize(x.size(), false);
     number = n;
     for (int i=0; i<taxid.size(); i++)
@@ -191,7 +191,7 @@ public:
       }
     // added for faster probability retrieval
     for(int i=0;i<indices.size();i++) {
-      probs[indices[i]] = log(counts[i] / total);
+      logProbs[indices[i]] = log(counts[i] / total);
       hasNonZeroProb[indices[i]] = true;
     }
     // code to create the pnode tree
@@ -221,7 +221,7 @@ public:
     indices.clear();
     counts.clear();
     pnodes.clear();
-    probs.clear();
+    logProbs.clear();
     taxonID.clear();
   }
   int getNumber() const { return number; }
@@ -243,7 +243,7 @@ public:
 
   // Can return log(0) if the gene prior does not have top.
   // Use this in combination with hasProb to not get log(0)
-  double getLogProb(int top) const { return probs[top]; }
+  double getLogProb(int top) const { return logProbs[top]; }
 
   bool hasProb(int top) const { return hasNonZeroProb[top]; }
 
@@ -300,9 +300,9 @@ private:
   double total;
   vector<int> indices;      // length is the number of topologies with positive probability
   vector<double> counts;    // length is the number of topologies with positive probability
-  vector<double> probs;     // length is the number of trees in the whole data set
+  vector<double> logProbs;     // length is the number of trees in the whole data set
                             // added to make the retrieval of probability information very fast (at the cost of space)
-  vector<bool> hasNonZeroProb;  // added to check if probs is valid. If counts[i] = 0, probs[i]=log(0) and isCountZero[i] = true
+  vector<bool> hasNonZeroProb;  // added to check if probs are valid. If counts[i] = 0, probs[i]=log(0) and isCountZero[i] = true
   vector<int> taxonID;      // taxon IDs in the overall translate table
   PickNode* root;
   list<PickNode*> pnodes;   // length is the number of topologies with positive probability

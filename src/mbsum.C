@@ -296,6 +296,7 @@ int main(int argc, char *argv[])
 
       ostringstream g;
       tree.printTop(g); // changed from mb2badger to not include an endline
+      g << endl;
       string top = g.str();
 
       if((i==0) && numTrees[0] == 1) // first tree

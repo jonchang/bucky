@@ -364,6 +364,5 @@ void Tree::printTop(ostream& f) {
     f << ")";
   }
   f << ");";
-  f<< endl;
 }
 }
