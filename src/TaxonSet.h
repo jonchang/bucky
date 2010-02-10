@@ -91,15 +91,15 @@ public:
   }
 
   TaxonSet operator-(const TaxonSet& other) {
-    return TaxonSet(dynamic_bitset<>(taxa - other.taxa));
+    return TaxonSet(dynamic_bitset<>(taxa - other.taxa), weight);
   }
 
   TaxonSet operator&(TaxonSet x) {
-    return TaxonSet(taxa & x.taxa);
+    return TaxonSet(taxa & x.taxa, weight);
   }
 
   TaxonSet operator|(TaxonSet x) {
-    return TaxonSet(taxa | x.taxa);
+    return TaxonSet(taxa | x.taxa, weight);
   }
 
   bool operator[] (const int nIndex) {
@@ -122,8 +122,9 @@ private:
     taxa[value] = 1;
   }
 
-  TaxonSet(dynamic_bitset<> t) {
+  TaxonSet(dynamic_bitset<> t, double wt) {
     taxa = t;
+    weight = wt;
   }
 
   dynamic_bitset<> taxa;
