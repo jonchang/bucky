@@ -99,9 +99,9 @@
 #include "mbsumtree.h"
 
 using namespace std;
-string VERSION = "1.3.1";
-string DATE = "29 October 2009";
-string COPYRIGHT = "Copyright (C) 2006-2008 by Bret Larget and Cecile Ane";
+string VERSION = "1.3.2";
+string DATE = "15 February 2010";
+string COPYRIGHT = "Copyright (C) 2006-2010 by Bret Larget and Cecile Ane";
 
 int countTaxa(string top) {
   int countTaxa=0;
@@ -192,7 +192,13 @@ bool getTaxaSubset(vector<string> inputFiles, vector<bool>& hasTtable, map<strin
   bool oneno = false;
   unsigned int maxTaxa = 0;
   if (!pruneFile.empty()) {
-    getTaxa(pruneFile, taxaNames, translateMap);
+    bool hasTable = getTaxa(pruneFile, taxaNames, translateMap);
+    if (!hasTable) {
+      cerr << "\nBucky cannot find translate table in " << pruneFile
+          << ". The prune file should start with keyword 'translate'."
+           << "Please cross check translate table format. "<< endl;
+      exit(0);
+    }
     fileNum = 0;
     maxTaxa = taxaNames.size();
   }
@@ -213,12 +219,20 @@ bool getTaxaSubset(vector<string> inputFiles, vector<bool>& hasTtable, map<strin
 
     set<string> output;
     set_intersection(taxaNames.begin(), taxaNames.end(), taxaInIFile.begin(), taxaInIFile.end(), inserter(output, output.begin()));
-    taxaNames = output;
-    if (taxaNames.size() < maxTaxa) {
+    if (output.size() < maxTaxa) {
       cerr << "\nCannot prune to taxa subset specified in " << pruneFile << endl;
       cerr << inputFiles[fileNum] << " does not have all taxa specified in the prune file" << endl;
+      for (set<string>::iterator itr = output.begin(); itr != output.end(); itr++) {
+        taxaNames.erase(*itr);
+      }
+      cerr << "Missing taxa:\n";
+      for (set<string>::iterator itr = taxaNames.begin(); itr != taxaNames.end(); itr++) {
+        cerr << *itr << "\n";
+      }
+
       exit(0);
     }
+    taxaNames = output;
   }
 
   // warning if genes do not all have translate tables
@@ -883,7 +897,7 @@ void usage(Defaults defaults)
   cerr << "  use independence prior | --use-independence-prior   | " << (defaults.getUseIndependencePrior() == true ? "true" : "false") << endl;
   cerr << "  calculate pairs        | --calculate-pairs          | " << (defaults.getCalculatePairs() == true ? "true" : "false") << endl;
   cerr << "  use update groups      | --use-update-groups        | " << (defaults.getUseUpdateGroups() == true ? "true" : "false") << endl;
-  cerr << "  prune file             | -p fileNameWithTaxaSubset  |" << endl;
+  cerr << "  taxon set              | -p prune-file              | common taxa" << endl;
   cerr << "  use update groups      | --do-not-use-update-groups |" << endl;
   cerr << "  help                   | -h OR --help               |" << endl;
   cerr << "  version                | --version                  |" << endl;
