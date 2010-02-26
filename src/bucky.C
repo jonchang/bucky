@@ -225,7 +225,7 @@ bool getTaxaSubset(vector<string> inputFiles, vector<bool>& hasTtable, map<strin
       for (set<string>::iterator itr = output.begin(); itr != output.end(); itr++) {
         taxaNames.erase(*itr);
       }
-      cerr << "Missing taxa:\n";
+      cerr << "Missing taxa for this locus:\n";
       for (set<string>::iterator itr = taxaNames.begin(); itr != taxaNames.end(); itr++) {
         cerr << *itr << "\n";
       }

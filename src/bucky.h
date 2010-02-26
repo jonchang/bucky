@@ -1176,20 +1176,20 @@ class TaxonList {
   }
   void print(ostream& f){
     //f << "All taxa:"<< endl;
-    f << "\ntranslate" << endl;
-    for (int i=0; i<Ntax; i++)
-      f << setw(4) << i+1 << " "<<name[i]<< (i<(Ntax-1)?",":";") <<endl;
-    f << "Taxa with missing data:"<< endl;
-    for (int i=0; i<Ntax; i++)
-      if (isMissingOne[i])
-	f << setw(4) << i+1 <<endl;
+    //f << "\ntranslate" << endl;
+    //for (int i=0; i<Ntax; i++)
+    //  f << setw(4) << i+1 << " "<<name[i]<< (i<(Ntax-1)?",":";") <<endl;
+    //f << "Taxa with missing data:"<< endl;
+    //for (int i=0; i<Ntax; i++)
+    //  if (isMissingOne[i])
+    //	f << setw(4) << i+1 <<endl;
     f << "Number of genes sequenced for each taxon:"<<endl;
     for (int i=0; i<Ntax; i++)
       f << setw(4) << i+1 << " "<<name[i]<<" "<< setw(6)<<numberGenes[i]<<endl;
-    f << "Taxa included in the analysis:\n";
-    for (int i=0; i<Ntax; i++)
-      if (include[i])
-	f << setw(4) << i+1 <<endl;
+    //f << "Taxa included in the analysis:\n";
+    //for (int i=0; i<Ntax; i++)
+    //  if (include[i])
+    //	f << setw(4) << i+1 <<endl;
   }
  private:
   int Ntax;             // total number of individuals
