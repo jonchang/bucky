@@ -404,7 +404,7 @@ bool readFile(string filename, int i, vector<string> &topologies, vector<vector<
       for(int k=0;k<=i;k++)
 	table[k].push_back(0);
     }
-    table[i][n] = weight;
+    table[i][n] += weight;
     lineNum++;
   }
   f.close();
