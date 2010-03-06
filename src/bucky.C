@@ -172,9 +172,9 @@ bool getTaxa(string& file, set<string>& taxaInIFile, map<string, int>& translate
     int taxaCount = countTaxa(top);
     for (int i=0; i<taxaCount; i++){
       ostringstream s;
-      s << "taxon" << i+1;
+      s << "taxon" << i+1;  // sets default taxon names to 'taxon1' through 'taxonN' in translateMap
       string as = s.str();
-      translateMap[as] = i + 1;
+      translateMap[as] = i + 1; // wrong!! translateMap will be changed when reading each and every gene!! fixit
       taxaInIFile.insert(as);
     }
   }
@@ -305,6 +305,9 @@ bool readFile(string filename, int i, vector<string> &topologies, vector<vector<
   map<int, int> translateID;
   // in case the numbers in the translate table are not from 1 to Ntax
   // translateID[i] = ID given to the taxon on line i+1 in the gene file
+  // Cecile: I think the comment above is incorrect. It looks like 
+  // translateID[ taxon number given in the input file] = ID given in 
+  // bucky's translate table used, common for all genes.
 
   string keyword;
   int numTaxa=translateMap.size();
@@ -348,7 +351,7 @@ bool readFile(string filename, int i, vector<string> &topologies, vector<vector<
   else {
     taxid.resize(numTaxa);
     for (int i = 0; i < numTaxa; i++) {
-      taxid[i] = i + 1;
+      taxid[i] = i + 1; // wrong! forcing to prune the taxon set to taxa with ids 1 through k. fixit
     }
   }
 
