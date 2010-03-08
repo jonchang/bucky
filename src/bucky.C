@@ -100,7 +100,7 @@
 
 using namespace std;
 string VERSION = "1.3.2";
-string DATE = "15 February 2010";
+string DATE = "8 March 2010";
 string COPYRIGHT = "Copyright (C) 2006-2010 by Bret Larget and Cecile Ane";
 
 int countTaxa(string top) {
