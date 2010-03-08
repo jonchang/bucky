@@ -569,8 +569,8 @@ class ConcordanceNode {
   int getDegree() { return edges.size(); }
   ConcordanceEdge* getEdge(int i) { return edges[i]; }
   ConcordanceNode* getNeighbor(ConcordanceEdge*);
-  void printRoot(ostream&);
-  void print(ostream&,ConcordanceEdge*);
+  void printRoot(ostream&, int);
+  void print(ostream&,ConcordanceEdge*, int);
   void printTopologyRoot(ostream&);
   void printTopology(ostream&,ConcordanceEdge*);
   int setMinTaxa(ConcordanceEdge*);
@@ -623,7 +623,7 @@ class ConcordanceTree {
     edges.clear();
   }
   void setMinTaxa();
-  void print(ostream&);
+  void print(ostream&, int);
   void printFull(ostream&);
   void printTopology(ostream&);
  private:
@@ -751,7 +751,7 @@ void ConcordanceNode::printTopology(ostream& f,ConcordanceEdge* parentEdge) {
   }
 }
 
-void ConcordanceNode::print(ostream& f,ConcordanceEdge* parentEdge) {
+void ConcordanceNode::print(ostream& f,ConcordanceEdge* parentEdge, int numGenes) {
   if(leaf)
     f << number + 1;
   else {
@@ -759,13 +759,13 @@ void ConcordanceNode::print(ostream& f,ConcordanceEdge* parentEdge) {
     int numChildren = edges.size() - 1;
     for(vector<ConcordanceEdge*>::iterator e=edges.begin(); e!=edges.end();e++)
       if(*e != parentEdge) {
-	getNeighbor(*e)->print(f,*e);
+	getNeighbor(*e)->print(f,*e, numGenes);
 	if(--numChildren > 0)
 	  f << ",";
       }
     f << ")";
   }
-  f << ":" << setprecision(3) << taxonSet.getWeight();
+  f << ":" << setprecision(3) << taxonSet.getWeight() / numGenes;
 }
 
 void ConcordanceNode::printTopologyRoot(ostream& f) {
@@ -778,10 +778,10 @@ void ConcordanceNode::printTopologyRoot(ostream& f) {
   f << ");" << endl;
 }
 
-void ConcordanceNode::printRoot(ostream& f) {
+void ConcordanceNode::printRoot(ostream& f, int numGenes) {
   f << "(";
   for(vector<ConcordanceEdge*>::iterator e=edges.begin(); e!=edges.end();e++) {
-    getNeighbor(*e)->print(f,*e);
+    getNeighbor(*e)->print(f,*e, numGenes);
     if(*e != edges.back())
       f << ",";
   }
@@ -795,10 +795,10 @@ void ConcordanceTree::printTopology(ostream& f) {
   f << endl;
 }
 
-void ConcordanceTree::print(ostream& f) {
+void ConcordanceTree::print(ostream& f, int numGenes) {
   f.setf(ios::fixed, ios::floatfield);
   f.setf(ios::showpoint);
-  nodes.back()->printRoot(f);
+  nodes.back()->printRoot(f, numGenes);
   f << endl;
 }
 
