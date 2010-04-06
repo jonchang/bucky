@@ -206,6 +206,7 @@ int main(int argc, char *argv[])
   vector<int> numTrees(numFiles,0);
   vector<int> numTaxa(numFiles,0);
   TopCountNode* root;
+  Pruner* mbsumPruner = new Pruner();
   for(int i=0;i<numFiles;i++) {
     ifstream f(fileNames[i].c_str());
     if(f.fail())
@@ -291,12 +292,11 @@ int main(int argc, char *argv[])
 
       string treeString;
       s >> treeString;
-      Tree tree(treeString,lineNumber);
+      Tree tree(treeString,lineNumber, mbsumPruner);
       numTrees[i]++;
 
       ostringstream g;
       tree.printTop(g); // changed from mb2badger to not include an endline
-      g << endl;
       string top = g.str();
 
       if((i==0) && numTrees[0] == 1) // first tree
