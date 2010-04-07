@@ -109,10 +109,6 @@ public:
 class Tree {
 public:
   Tree(string,int,Pruner*);
-  Tree(string s, int i) {
-    thePruner = new Pruner();
-    Tree(s, i, thePruner);
-  }
   ~Tree() {
     for(vector<Edge*>::iterator e=edges.begin();e!=edges.end();e++)
       delete *e;
