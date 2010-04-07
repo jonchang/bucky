@@ -1090,6 +1090,22 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
       rp.setPruneFile(argv[++k]);
       k++;
     }
+    else if (flag =="--genomewide-grid-size") {
+      // grid-size is 1000 by default. 
+      // fixit: Yujin observed obviously wrong genome-wide CF values when the number of genes exceeds the grid size. 
+      // fixit: need to check that a higher grid-size fixed the bug, then add checks at the beginning to automatically 
+      // increase the grid size to at least 10 * the number of genes. Or do whatever to fix the bug.
+      unsigned int ngrid;
+      string num = argv[++k];
+      istringstream f(num);
+      if( !(f >> ngrid) )
+	usage(defaults); // fixit: add info on this option in the usage message
+      if(ngrid==0)
+	cerr << "Warning: parameter grid-size must be at least one. Ignoring option genomewide-grid-size " << ngrid << "." << endl;
+      else
+	rp.setNumGenomewideGrid(ngrid);
+      k++;
+    }
     else
       done = true;
   }
@@ -2053,6 +2069,7 @@ int main(int argc, char *argv[])
     states[irun].resize(rp.getNumChains());
 
   vector<vector<int> > index(rp.getNumRuns());
+  // index: indicates which chain is the cold chain, and then which is the next coldest etc.
   for (unsigned int irun=0; irun<rp.getNumRuns(); irun++)
     index[irun].resize(rp.getNumChains());
 
