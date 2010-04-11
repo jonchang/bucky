@@ -1,25 +1,25 @@
+#
+# To compile, type "make" or make "all"
+# To remove files, type "make clean"
+#
+OBJS = TaxonSet.o Alias.o mbsumtree.o
+TARGET = server
+
 CC = g++
+CFLAGS = -O3 -I.
 
-CCFLAGS = -O3 -I.
-OBJS = bucky.o
+.SUFFIXES: .C .o 
 
-all	: bucky mbsum
+all: bucky mbsum
 
-clean	:
-	rm *.o bucky mbsum
+bucky: bucky.C bucky.h $(OBJS)
+	$(CC) $(CFLAGS) -o bucky bucky.C $(OBJS)
 
-bucky   : ${OBJS}
-	${CC} -o $@ ${CCFLAGS} bucky.o TaxonSet.o mbsumtree.o
+mbsum: mbsum.C mbsumtree.o
+	$(CC) $(CFLAGS) -o mbsum mbsum.C mbsumtree.o
 
-bucky.o : bucky.h bucky.C TaxonSet.o mbsumtree.o
-	${CC} -c ${CCFLAGS} bucky.C
+.C.o:
+	$(CC) $(CFLAGS) -o $@ -c $<
 
-TaxonSet.o : TaxonSet.C TaxonSet.h
-	${CC} -c ${CCFLAGS} TaxonSet.C
-
-mbsumtree.o : mbsumtree.C mbsumtree.h
-	${CC} -c ${CCFLAGS} mbsumtree.C
-
-mbsum	: mbsum.C mbsumtree.o
-	${CC} -o $@ ${CCFLAGS} mbsum.C mbsumtree.o
-
+clean:
+	-rm -f $(OBJS) bucky mbsum

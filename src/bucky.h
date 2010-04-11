@@ -8,237 +8,62 @@
 #include <fstream>
 #include <vector>
 #include <list>
+#include <map>
 #include <algorithm>
 #include "boost/dynamic_bitset.hpp"
+#include "boost/unordered_map.hpp"
 #include "TaxonSet.h"
 #include "mbsumtree.h"
+#include "Rand.h"
+#include "Alias.h"
+#include "TGM.h"
 using namespace std;
 
 static double LOG_ZERO = log(0);
-class Rand {
-/*
- *  Mathlib : A C Library of Special Functions
- *  Copyright (C) 2000, 2003  The R Development Core Team
- *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- *
- */
-
-/* A version of Marsaglia-MultiCarry */
-
- public:
-
-  Rand(unsigned int seed1=1234, unsigned int seed2=5678) : I1(seed1), I2(seed2) {}
-
-  void setSeed(unsigned int i1=1234, unsigned int i2=5678) { I1 = i1; I2 = i2; }
-
-  void getSeed(unsigned int& i1, unsigned int& i2) { i1 = I1; i2 = I2; }
-
-  double runif() {
-    // Returns a pseudo-random number between 0 and 1.
-
-    I1= 36969*(I1 & 0177777) + (I1>>16);
-    I2= 18000*(I2 & 0177777) + (I2>>16);
-    return ((I1 << 16)^(I2 & 0177777)) * 2.328306437080797e-10; /* in [0,1) */
-  }
- private:
-  unsigned int I1, I2;
-};
-
-/*******************************************************************************
-class PickNode
-
-The class PickNode contains data and methods for a binary search tree
-used to pick a topology at random from a gene from its known
-distribution.  The binary search tree is created by the principles of
-Huffman coding which minimizes the average depth of search, weighted
-by the relative frequency of the proposed searches.
-
-Each topology is a leaf on the tree and has a weight proportional to
-its probability.  The total weight of the tree is the sum of the
-weights of the leaves.  A random number x is generated uniformly
-between 0 and the total weight.  Each internal node has a point that
-defines the decision --- go left if x is less than the point and go
-right if x is greater than the point.
-
-The tree is constructed beginning with each topology as its own leaf,
-sorted from largest to smallest.  Then the tree is formed by
-repeatedly joining the two leaves with the smallest probabilities.
-The newly formed internal node is put into the list in order.
-Continue until all nodes are joined.  The last created internal node
-is the root.
-
-Each gene ultimately has a list of nodes, some internal and some
-leaves with a separate tree structure (left/right) to follow to find
-the selected tree.
-
-This structure minimizes the average number of comparisons to make for
-each proposed tree ideally.
-*******************************************************************************/
-
-class PickNode {
- public:
-  PickNode() {}
-  PickNode(int top0,double total0) {
-    top = top0;
-    total = total0;
-    point = 0;
-    left = right = NULL;
-  }
-  PickNode(PickNode* l,PickNode* r) {
-    left = l;
-    right = r;
-    total = left->getTotal() + right->getTotal();
-    point = 0;
-    top = -1;
-  }
-  int pick(double);
-  double getTotal() { return total; }
-  double getPoint() { return point; }
-  int getTop() { return top; }
-  PickNode* getLeft() { return left; }
-  PickNode* getRight() { return right; }
-  void print(ostream&);
-  void print(ostream&,int);
-  void printFull(ostream&);
-  void setPoints();
-  void setPoints(double);
- private:
-  PickNode* left;
-  PickNode* right;
-  double total,point;
-  int top;
-};
-
-int PickNode::pick(double x) {
-  if(left==NULL)
-    return top;
-  if(x < point)
-    return left->pick(x);
-  else
-    return right->pick(x);
-}
-
-void PickNode::printFull(ostream &f) {
-  f << "(" << top;
-  if(left != NULL)
-    f << "," << left->getTop() << "," << right->getTop();
-  else
-    f << ",NULL,NULL";
-  f << "|" << total << "," << point << ")" << endl;
-}
-
-void PickNode::print(ostream&f) {
-  print(f,0);
-}
-
-void PickNode::print(ostream &f,int depth) {
-  for(int i=0;i<depth;i++)
-    f << "    ";
-  if(left==NULL)
-    f << "{" << top << ":" << total << "}" << endl;
-  else {
-    f << "[< " << point << " | > " << point << "]" << endl;
-    left->print(f,depth+1);
-    right->print(f,depth+1);
-  }
-}
-
-void PickNode::setPoints() {
-  setPoints(0);
-}
-
-void PickNode::setPoints(double excess) {
-  if(left==NULL)
-    return;
-  left->setPoints(excess);
-  point = excess + left->getTotal();
-  right->setPoints(point);
-}
-
-bool cmpPickNodes(PickNode* x,PickNode* y) { return( x->getTotal() > y->getTotal() ); }
 
 class Gene {
 public:
-  Gene(int n, vector<double> x, vector<int> taxid) {
-    logProbs.resize(x.size(),LOG_ZERO);
-    hasNonZeroProb.resize(x.size(), false);
+  Gene(int n) {
     number = n;
-    for (int i=0; i<taxid.size(); i++)
-      taxonID.push_back(taxid[i]);
-    numTrees = 0;
     total = 0.0;
-    for(int i=0;i<x.size();i++)
-      if(x[i]>0) {
-	numTrees++;
-	total += x[i];
-	indices.push_back(i);
-	counts.push_back(x[i]);
-	// added for faster sampling of trees
-	pnodes.push_back(new PickNode(i,x[i]));
-      }
-    // added for faster probability retrieval
+    numTrees = 0;
+  }
+
+  void addCount(int topIndex, double count) {
+    if (count > 0) {
+      numTrees++;
+      total += count;
+      indices.push_back(topIndex);
+      counts.push_back(count);
+    }
+  }
+
+  void updateState(int size) {
+    vector<double> probs(indices.size(), 0.0);
+    logProbs.resize(size,LOG_ZERO);
+    hasNonZeroProb.resize(size, false);
     for(int i=0;i<indices.size();i++) {
-      logProbs[indices[i]] = log(counts[i] / total);
+      double prob = counts[i]/total;
+      probs[i] = prob;
+      logProbs[indices[i]] = log(prob);
       hasNonZeroProb[indices[i]] = true;
     }
-    // code to create the pnode tree
-    pnodes.sort(cmpPickNodes);
-    if(pnodes.size()==1)
-      root = *(pnodes.begin());
-    else {
-      int numInternalNodes = pnodes.size() - 1;
-      list<PickNode*>::iterator end=pnodes.end();
-      for(int i=0;i<numInternalNodes;i++) {
-	PickNode* y = *(--end);
-	PickNode* x = *(--end);
-	PickNode* z = new PickNode(x,y);
-	list<PickNode*>::iterator ins = end;
-	while(ins != pnodes.begin() && cmpPickNodes(z,*(--ins)))
-	  ;
-	if(ins != pnodes.begin())
-	  ins++;
-	pnodes.insert(ins,z);
-	if(i==numInternalNodes-1)
-	  root = z;
-      }
-    }
-    root->setPoints();
+    //added for faster probability retreival
+    alias = new Alias(probs, indices);
   }
   ~Gene() {
     indices.clear();
     counts.clear();
-    pnodes.clear();
     logProbs.clear();
-    taxonID.clear();
+    delete alias;
   }
   int getNumber() const { return number; }
   int getNumTrees() const { return numTrees; }
   double getTotal() const { return total; }
   int getIndex(int i) const { return indices[i]; }
   double getCount(int i) const { return counts[i]; }
-  int getNumberTaxa() const { return taxonID.size(); }
-  int pickTree(Rand& r) const {
-    double x = total * r.runif();
-    int i=0;
-    while(x>counts[i])
-      x -= counts[i++];
-    return indices[i];
-  }
   int pickTreeFast(Rand& r) const {
-    return root->pick(total * r.runif());
+    return alias->pick(r);
   }
 
   // Can return log(0) if the gene prior does not have top.
@@ -267,7 +92,7 @@ public:
       f << setw(5) << i << ":" << setw(7) << indices[i] << setw(12) << setprecision(8) << counts[i] << endl;
     f << endl;
   }
-  void print(ostream& f,const vector<vector<int> > &newTable,int numCycles,const vector<string> &topologies,int max) {
+  void print(ostream& f, Table* table, int numCycles,const vector<string> &topologies,int max) {
     f.setf(ios::fixed, ios::floatfield);
     f.setf(ios::showpoint);
     f << "Gene " << number << ":" << endl;
@@ -276,23 +101,13 @@ public:
       << setw(max) << left << "topology" << right
       << setw(10) << "single"
       << setw(10) << "joint" << endl;
-    for(int i=0;i<numTrees;i++)
-      f << setw(7) << indices[i] << " "
-	<< setw(max) << left << topologies[indices[i]].substr(0,max) << right
-	<< setw(10) << setprecision(6) << counts[i] / total
-	<< setw(10) << setprecision(6) << (double) newTable[indices[i]][number] / (double) numCycles << endl;
-    f << endl;
-  }
-  void printTaxa(ostream& f, vector<string> taxonTable){
-    f << "\nGene " << number << ": " << taxonID.size() << " taxa" << endl;
-    for (int i=0; i<taxonID.size(); i++){
-      if (taxonID[i] <= taxonTable.size())
-	f << setw(4) << i+1 << setw(4) << taxonID[i] <<" "<< taxonTable[taxonID[i]-1] << endl;
-      else{
-	cerr << "taxonID ("<<taxonID[i]<<") too large for gene " << number << endl;
-	break;
-      }
+    for(int i=0;i<numTrees;i++) {
+        f << setw(7) << indices[i] << " "
+        << setw(max) << left << topologies[indices[i]].substr(0,max) << right
+        << setw(10) << setprecision(6) << counts[i] / total
+        << setw(10) << setprecision(6) << (double) table->getCounts(indices[i], number) / (double) numCycles << endl;
     }
+    f << endl;
   }
 private:
   int number;
@@ -303,9 +118,7 @@ private:
   vector<double> logProbs;     // length is the number of trees in the whole data set
                             // added to make the retrieval of probability information very fast (at the cost of space)
   vector<bool> hasNonZeroProb;  // added to check if probs are valid. If counts[i] = 0, probs[i]=log(0) and isCountZero[i] = true
-  vector<int> taxonID;      // taxon IDs in the overall translate table
-  PickNode* root;
-  list<PickNode*> pnodes;   // length is the number of topologies with positive probability
+  Alias *alias;
 };
 
 class State {
@@ -326,7 +139,7 @@ public:
       counts[i] = 0;
     for(int i=0;i<genes.size();i++) {
       int top;
-      top = genes[i]->pickTree(rand);
+      top = genes[i]->pickTreeFast(rand);
       if(counts[top]==0) {
 	numGroups++;
 	indices.push_back(top);
@@ -406,6 +219,10 @@ public:
   void updateTable(vector<vector<int> >& table) {
     for(int j=0;j<genes.size();j++)
       table[tops[j]][j]++;
+  }
+  void updateTable(Table* &table) {
+    for(int j=0;j<genes.size();j++)
+      table->addGeneCount(tops[j], j, 1);
   }
   void print(ostream&);
   void updateSplits(vector<vector<int> >&,vector<vector<int> >&);
@@ -906,7 +723,8 @@ public:
     createJointFile(false),
     createSingleFile(false),
     numGenomewideGrid(1000),
-    swCFcutoff(.05)
+    swCFcutoff(.05),
+    optSpace(false)
   {}
   double getAlphaMultiplier() { return alphaMultiplier; }
   void setAlphaMultiplier(double x) { alphaMultiplier = x; }
@@ -940,6 +758,8 @@ public:
   void   setSwCFcutoff(double x) { swCFcutoff = x; }
   string getPruneFile() { return pruneFile; }
   void setPruneFile(string pFile) { pruneFile = pFile; }
+  bool shouldOptSpace() { return optSpace;}
+  void setOptSpace(bool o) { optSpace = o; }
 private:
   double alphaMultiplier,swCFcutoff;  // cutoff on sample-wide CF to display splits
   unsigned int seed1,seed2,numUpdates,subsampleRate,numRuns,numChains,mcmcmcRate,numGenomewideGrid;
@@ -949,6 +769,8 @@ private:
   bool createJointFile;
   bool createSingleFile;
   string pruneFile;
+  bool optSpace; // set this if gene topology counts forms a sparse matrix. We do not store zeros in the 'table' in this case.
+                 // default is false because this is not time-efficient.
 };
 
 class Defaults {
@@ -1013,23 +835,6 @@ private:
   bool createJointFile;
   bool createSingleFile;
 };
-
-class TreeWeight {
-public:
-  TreeWeight() {}
-  void setWeight(double x) { weight=x; }
-  void addWeight(double x) { weight += x; }
-  double getWeight() { return weight; }
-  void setIndex(int x) { index=x; }
-  int getIndex() { return index; }
-private:
-  double weight;
-  int index;
-};
-
-bool cmpTreeWeights(TreeWeight x,TreeWeight y) { return x.getWeight() > y.getWeight(); }
-
-
 
 class GenomewideDistribution {
  public:
