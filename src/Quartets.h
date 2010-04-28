@@ -1,5 +1,6 @@
 #ifndef QUARTETS_H_
 #define QUARTETS_H_
+namespace quartet {
 
 class Quartets {
 public:
@@ -19,13 +20,24 @@ public:
     }
 
     void merge(TaxonSet*& other) {
-        for (vector<int>::iterator itr = other->tset.begin(); itr != other->tset.end(); itr++) {
-            tset.push_back(*itr);
-        }
+        //merge two sorted ranges, result is also sorted.
+        int initialSize = tset.size();
+        tset.resize(initialSize + other->tset.size());
+        vector<int> otherset = other->getTSet();
+        copy(otherset.begin(), otherset.begin() + otherset.size(), tset.begin() + initialSize);
+        inplace_merge(tset.begin(), tset.begin() + initialSize, tset.end());
     }
 
     vector<int>& getTSet() {
         return tset;
+    }
+
+    void remove(TaxonSet*& other) {
+        for (vector<int>::iterator itr = other->tset.begin(); itr != other->tset.end(); itr++) {
+            vector<int>::iterator pos = find(tset.begin(), tset.end(), *itr);
+            if (pos != tset.end())
+                tset.erase(pos);
+        }
     }
 
     friend ostream& operator<<(ostream& f, TaxonSet& t) {
@@ -43,33 +55,39 @@ class Edge;
 class Node {
 public:
   Node(int n,int lf) : number(n) {
-    t = new TaxonSet();
+    for (int i = 0; i < 3; i++)
+      t[i] = new TaxonSet();
+
     if(lf)
       leaf = true;
     else
       leaf = false;
   }
-  ~Node() { delete t;}
+  ~Node() { /*delete[] t;*/}
   int getNumber() const { return number; }
   Edge* getEdge(int n) const { return edges[n]; }
   bool isLeaf() const { return leaf; }
   void setEdge(int n,Edge *e) { edges[n]=e; }
   void print(ostream&) const;
   Node* getNeighbor(int) const;
-  void mergeTaxa(Node *n) {
-      t->merge(n->t);
+  void mergeTaxa(int index, Node *n, int nIndex) {
+      t[index]->merge(n->t[nIndex]);
   }
-  void addTaxa(int taxon) {
-      t->add(taxon);
+  void addTaxa(int index, int taxon) {
+      t[index]->add(taxon);
   }
-  vector<int>& getTaxa() {
-      return t->getTSet();
+  vector<int>& getTaxa(int index) {
+      return t[index]->getTSet();
+  }
+
+  TaxonSet*& getTset(int index) {
+      return t[index];
   }
 private:
   int number;
   bool leaf;
   Edge* edges[3];
-  TaxonSet* t;
+  TaxonSet* t[3];
 };
 
 class Edge {
@@ -110,12 +128,13 @@ public:
       delete edges[i];
   }
   void connect(string);
-  Node* connectInt(istream&,int&,int&,int&);
+  Node* connectInt(istream&,int&,int&,int&,int&);
   Node* connectThreeNodes(Node*,Node*,Node*,int&,int&);
   void connectTwoNodes(Node*,Node*,int&,int&);
   void print(ostream&) const;
   void setAllTaxa();
-  void getQuartets(vector<vector<int> >& quartets);
+//  void getQuartets(vector<vector<int> >& quartets);
+  void getQuartets(vector<int>& rInd, vector<int>& cInd);
   int getNumTaxa() const { return numTaxa; }
   int getNumNodes() const { return numNodes; }
   int getNumEdges() const { return numEdges; }
@@ -123,11 +142,14 @@ public:
   Node* getNode(int i) const { return nodes[i]; }
   Edge* getEdge(int i) const { return edges[i]; }
   string getTop() const { return top; }
+  int intersect(vector<int>& t1, vector<int>& t2);
+  void getTsets(vector<vector <int> >& tsets, Node *n1, Node *n2);
 private:
   int numTaxa,numNodes,numEdges,numSplits;
   vector<Node *> nodes;
   vector<Edge *> edges;
   string top;
+  Node *root;
 };
-
+}
 #endif /* QUARTETS_H_ */
