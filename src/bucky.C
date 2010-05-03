@@ -172,7 +172,7 @@ bool getTaxa(string& file, set<string>& taxaInIFile, map<string, int>& translate
 
 }
 
-void getTaxaSubset(vector<string> inputFiles, map<string, int>& prunedTranslateMap, vector<string>& translateTable, string pruneFile) {
+bool getTaxaSubset(vector<string> inputFiles, vector<bool>& hasTtable, map<string, int>& prunedTranslateMap, vector<string>& translateTable, string pruneFile, bool& changed) {
   map<string, int> translateMap;
   set<string> taxaNames;
   size_t fileNum = 1;
@@ -210,8 +210,13 @@ void getTaxaSubset(vector<string> inputFiles, map<string, int>& prunedTranslateM
     }
 
     set<string> output;
+    int count = taxaInIFile.size();
     set_intersection(taxaNames.begin(), taxaNames.end(), taxaInIFile.begin(), taxaInIFile.end(), inserter(output, output.begin()));
-    if (output.size() < maxTaxa) {
+    taxaNames = output;
+    if (count != taxaInIFile.size() || count != taxaNames.size()) {
+        changed = true;
+    }
+    if (taxaNames.size() < maxTaxa) {
       cerr << "\nCannot prune to taxa subset specified in " << pruneFile << endl;
       cerr << inputFiles[fileNum] << " does not have all taxa specified in the prune file" << endl;
       for (set<string>::iterator itr = output.begin(); itr != output.end(); itr++) {
@@ -262,6 +267,16 @@ string pruneTop(string top, int lineNum, mbsumtree::Pruner* p) {
   return newtop.str();
 }
 
+void normalize(vector<double>& table) {
+  double sum = 0;
+  for(int j=0;j<table.size();j++)
+    sum += table[j];
+
+  if(sum > 0)
+    for(int j=0;j<table.size();j++)
+      table[j] /= sum;
+}
+
 //
 // readFile
 //
@@ -271,9 +286,11 @@ string pruneTop(string top, int lineNum, mbsumtree::Pruner* p) {
 // add read topologies to row i of the table
 // when new topologies are discovered, add a new column to the table
 
-void readFile(string filename, int i, vector<string> &topologies, vector<vector<double> > &table, int &max,
-              vector<int>& taxid, map<string, int>& translateMap)
+bool readFile(string filename, int i, Table*& tgm, int &max,
+              vector<int>& taxid, map<string, int>& translateMap, bool hasTtable, bool changed)
 {
+  vector<double> table;
+  vector<string> topologies;
   ifstream f(filename.c_str());
   if(f.fail()) {
     cerr <<"Error: Cannot open file " << filename << "." << endl;
@@ -326,7 +343,6 @@ void readFile(string filename, int i, vector<string> &topologies, vector<vector<
     numTaxa=taxid.size();
 
   // set zeros for ith row of table
-  table[i].resize(topologies.size(),0);
   while(f.good() && !f.eof()) {
     string top;
     double weight;
@@ -364,22 +380,25 @@ void readFile(string filename, int i, vector<string> &topologies, vector<vector<
       top = otop.str();
 
     top = pruneTop(top, lineNum, thePruner);
+
     // determine longest length of topology string
     if(top.length()>max)
       max = top.length();
 
-    // check if topology has already been read
-    int n = find(topologies.begin(),topologies.end(),top) - topologies.begin();
-    if(n==topologies.size()) {
-      topologies.push_back(top);
-      for(int k=0;k<=i;k++)
-	table[k].push_back(0);
-    }
-    table[i][n] += weight;
+    topologies.push_back(top);
+    table.push_back(weight);
     lineNum++;
   }
   f.close();
   delete thePruner;
+
+  normalize(table);
+  vector<double>::iterator citr;
+  vector<string>::iterator titr;
+  for (titr = topologies.begin(), citr = table.begin(); titr != topologies.end(); titr++, citr++) {
+    tgm->addGeneCount(*titr, i, *citr);
+  }
+  return hasTtable;
 }
 
 double State::calculateLogPriorProb()
@@ -898,6 +917,7 @@ void showParameters(ostream& f,FileNames& fn,Defaults defaults,ModelParameters& 
   f << "  calculate pairs        | --calculate-pairs        | " << left << setw(14) << (defaults.getCalculatePairs() == true ? "true" : "false")       << "| " << (rp.getCalculatePairs() ? "true" : "false" ) << endl;
   f << "  use update groups      | --use-update-groups      | " << left << setw(14) << (defaults.getUseUpdateGroups() == true ? "true" : "false")      << "| " << (rp.getUseUpdateGroups() ? "true" : "false")<< endl;
   f << "  File with prune list   | -p pruneFile             | " << left << setw(14) << ""                                                              << "| " << rp.getPruneFile() << endl;
+  f << "  Space optimization     | --opt-space              | " << left << setw(14) << (defaults.shouldOptSpace() == true ? "true" : "false")          << "| " << (rp.shouldOptSpace() ? "true" : "false") << endl;
   f << "  ------------------------------------------------------------------------------" << endl;
 }
 
@@ -1106,6 +1126,10 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
 	rp.setNumGenomewideGrid(ngrid);
       k++;
     }
+    else if (flag =="--opt-space") {
+      rp.setOptSpace(true);
+      k++;
+    }
     else
       done = true;
   }
@@ -1133,11 +1157,13 @@ void readInputFileList(string inputListFileName, vector<string>& inputFiles) {
   }
 }
 
-void readInputFiles(vector<string>& inputFiles,vector<vector<double> >& table, vector<string>& translateTable,
-                    vector<string>& topologies,int& max, ostream& fout, vector<vector<int> >& taxid, string prunefile)
+bool readInputFiles(vector<string>& inputFiles,Table* &tgm, vector<string>& translateTable,
+                    int& max, ostream& fout, vector<vector<int> >& taxid, string prunefile)
 {
+  bool changed = false;
+  vector<bool> hasTtable(inputFiles.size());
   map<string, int> translateMap;
-  getTaxaSubset(inputFiles, translateMap, translateTable, prunefile);
+  bool oneno = getTaxaSubset(inputFiles, hasTtable, translateMap, translateTable, prunefile, changed);
   if (translateTable.size() < 4) {
     cerr << "Too few taxa (" << translateTable.size() << ") left after pruning process, Taxa common to all genes:" << endl;
     for (map<string,int>::iterator itr = translateMap.begin(); itr != translateMap.end(); itr++) {
@@ -1147,41 +1173,27 @@ void readInputFiles(vector<string>& inputFiles,vector<vector<double> >& table, v
     exit(0);
   }
 
+
+  int part = inputFiles.size() / 50;
+  if (part != 0) {
+      cout << "0   10   20   30   40   50   60   70   80   90   100" << endl;
+      cout << "+----+----+----+----+----+----+----+----+----+----+" << endl;
+      fout << "0   10   20   30   40   50   60   70   80   90   100" << endl;
+      fout << "+----+----+----+----+----+----+----+----+----+----+" << endl;
+  }
   for (size_t i=0;i<inputFiles.size();i++){
-    readFile(inputFiles[i],i,topologies,table,max,taxid[i],translateMap);
+    if (part != 0 && i % part == 0) {
+      cout << "*";
+      fout << "*";
+    }
+    readFile(inputFiles[i],i,tgm,max,taxid[i],translateMap, hasTtable[i], changed);
   }
-}
+  if (part != 0) {
+    cout << endl;
+    fout << endl;
+  }
 
-void normalize(vector<vector<double> >& table) {
-  for(int i=0;i<table.size();i++) {
-    double sum = 0;
-    for(int j=0;j<table[i].size();j++)
-      sum += table[i][j];
-    if(sum > 0)
-      for(int j=0;j<table[i].size();j++)
-	table[i][j] /= sum;
-  }
-}
-
-void sortTrees(vector<vector<double> >& table,vector<string>& topologies)
-{
-  vector<TreeWeight> tw(topologies.size());
-  for(int j=0;j<topologies.size();j++) {
-    tw[j].setWeight(0);
-    tw[j].setIndex(j);
-  }
-  for(int i=0;i<table.size();i++)
-    for(int j=0;j<table[i].size();j++)
-      tw[j].addWeight(table[i][j]);
-  sort(tw.begin(),tw.end(),cmpTreeWeights);
-  vector<string> topCopy = topologies;
-  for(int j=0;j<topologies.size();j++)
-    topologies[j] = topCopy[tw[j].getIndex()];
-  for(int i=0;i<table.size();i++) {
-    vector<double> weightCopy = table[i];
-    for(int j=0;j<table[i].size();j++)
-      table[i][j] = weightCopy[tw[j].getIndex()];
-  }
+  return(oneno);
 }
 
 void Defaults::print(ostream& f) {
@@ -1357,7 +1369,7 @@ void GenomewideDistribution::updateGenomewide(double alpha) {
 // Currently one function to write all output
 // Should have separate functions for each type of output
 void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int numTaxa,vector<string> topologies,
-		 int numGenes,RunParameters& rp,ModelParameters& mp,vector<vector<int> >& newTable,
+		 int numGenes,RunParameters& rp,ModelParameters& mp,Table *newTable,
 		 vector<vector<int> >& clusterCount, vector<TaxonSet>& splits,  vector<vector<vector<int> > >& splitsGeneMatrix,
 		 vector<vector<int> >& pairCounts,   vector<Gene*>& genes, vector<double>& alphas,
 		 vector<vector<int> >& mcmcmcAccepts,vector<vector<int> >& mcmcmcProposals, vector<string>& translateTable)
@@ -1375,8 +1387,9 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
     jointStr.setf(ios::showpoint);
     for(int i=0;i<numTrees;i++) {
       jointStr << setw(4) << i << " " << setw(max) << left << topologies[i].substr(0,max) << right;
-      for(int j=0;j<numGenes;j++)
-	jointStr << " " << setw(8) << setprecision(5) << newTable[i][j] / ((double)rp.getNumRuns()*rp.getNumUpdates());
+      for(int j=0;j<numGenes;j++) {
+          jointStr << " " << setw(8) << setprecision(5) << newTable->getCounts(i, j) / ((double)rp.getNumRuns()*rp.getNumUpdates());
+      }
       jointStr << endl;
     }
     cout << "done." << endl;
@@ -1826,10 +1839,6 @@ int main(int argc, char *argv[])
 
   int numGenes = inputFiles.size();
 
-  // table has one row for each input file and one column for each observed topology
-  // weights for each are doubles rather than integers to allow for non-sample-based input
-  vector<vector<double> > table(numGenes);
-  vector<string> topologies;
   int max=0;
   int numTaxa;
   vector<string> translateTable;
@@ -1854,11 +1863,12 @@ int main(int argc, char *argv[])
   showParameters(fout,fileNames,defaults,mp,rp);
   fout << endl;
 
-  cout << "Reading in summary files...." << flush;
-  fout << "Reading in summary files...." << flush;
-  readInputFiles(inputFiles,table,translateTable,topologies,max,fout,taxid, rp.getPruneFile());
+  cout << "Reading in summary files...." << endl;
+  fout << "Reading in summary files...." << endl;
+  Table *topToGeneMap = new TGM();
+  bool missingTtable = readInputFiles(inputFiles,topToGeneMap,translateTable,max,fout,taxid, rp.getPruneFile());
   numTaxa = translateTable.size();
-  cout << "done." << endl;
+  cout << "....done." << endl;
 
   // Check for missing taxa.
   for(int i=0; i<inputFiles.size(); i++) {
@@ -1897,7 +1907,7 @@ int main(int argc, char *argv[])
   // collapse the table to only unique topologies, with updated counts
   // ??update the translate table and the taxid vectors??
 
-  int numTrees = topologies.size();
+  int numTrees = topToGeneMap->getNumTrees();
   cout << "Read " << numGenes << " genes with a total of " << numTrees << " different sampled tree topologies" << endl;
   fout << "Read " << numGenes << " genes with a total of " << numTrees << " different sampled tree topologies" << endl;
 
@@ -1914,8 +1924,8 @@ int main(int argc, char *argv[])
 
   cout << "Sorting trees by average posterior probability...." << flush;
   fout << "Sorting trees by average posterior probability...." << flush;
-  normalize(table);
-  sortTrees(table,topologies);
+  topToGeneMap->reorder(); // sort according to topology counts
+  vector<string> topologies = topToGeneMap->getTopologies();
   cout << "done." << endl;
   fout << "done." << endl;
 
@@ -1932,8 +1942,8 @@ int main(int argc, char *argv[])
     for(int i=0;i<numTrees;i++) {
       singleStr << setw(4) << i << " " << setw(max) << left << topologies[i].substr(0,max) << right;
       for(int j=0;j<numGenes;j++)
-	singleStr << " " << setw(8) << table[j][i];
-      singleStr << endl;
+        singleStr << " " << setw(8) << topToGeneMap->getCounts(topologies[i], j);
+        singleStr << endl;
     }
     singleStr.close();
     cout << "done." << endl;
@@ -1954,22 +1964,32 @@ int main(int argc, char *argv[])
   fout << "Initializing gene information...." << flush;
   vector<Gene*> genes(numGenes);
   vector<double> counts(numTrees);
+
+  // create gene objects
   for(int i=0;i<numGenes;i++) {
-    for(int j=0;j<numTrees;j++)
-      counts[j] = table[i][j];
-    genes[i] = new Gene(i,counts,taxid[i]);
-    //genes[i]->printTaxa(cerr,translateTable);
+    genes[i] = new Gene(i);
+  }
+
+  // update counts for gene objects
+  int topIndex = 0;
+  for (vector<string>::iterator titr = topologies.begin(); titr != topologies.end(); titr++, topIndex++) {
+    const vector<GeneCounts>& geneCounts = topToGeneMap->getCounts(*titr);
+    for (vector<GeneCounts>::const_iterator gitr = geneCounts.begin(); gitr != geneCounts.end(); gitr++) {
+      genes[gitr->getGene()]->addCount(topIndex, gitr->getCount());
+    }
+  }
+
+  // update probabilities and create cells using Alias method for faster sampling
+  for(int i=0;i<numGenes;i++) {
+    genes[i]->updateState(topologies.size());
   }
   cout << "done." << endl << flush;
   fout << "done." << endl << flush;
-
   // Finished with table and taxid, so delete them.
-
-  for(int i=0;i<table.size();i++){
-    table[i].clear();
+  delete topToGeneMap;
+  for(int i=0;i<taxid.size();i++){
     taxid[i].clear();
   }
-  table.clear();
   taxid.clear();
 
   // old .gene --- eliminated
@@ -2148,13 +2168,6 @@ int main(int argc, char *argv[])
       clusterCount[irun][i] = 0;
   }
 
-  vector<vector<int> > newTable(numTrees); // not adapted to several runs.
-  for(int i=0;i<numTrees;i++) {
-    newTable[i].resize(numGenes);
-    for(int j=0;j<numGenes;j++)
-      newTable[i][j] = 0;
-  }
-
   cout << "done." << endl << flush;
   fout << "done." << endl << flush;
 
@@ -2197,6 +2210,12 @@ int main(int argc, char *argv[])
     for(int i=0;i<rp.getNumChains();i++)
       mcmcmcAccepts[irun][i] = mcmcmcProposals[irun][i] = accept[irun][i] = 0;
   }
+
+  Table* newTable;
+  if (rp.shouldOptSpace())
+      newTable = new TGM(topologies);
+  else
+      newTable = new TGMTable(numGenes, topologies);
 
   for(int cycle=0;cycle<rp.getNumUpdates();cycle++) {
     for (unsigned int irun=0; irun<rp.getNumRuns(); irun++){
