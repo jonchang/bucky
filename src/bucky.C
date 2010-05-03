@@ -885,9 +885,10 @@ void usage(Defaults defaults)
   cerr << "  create single file     | --create-single-file       | " << (defaults.getCreateSingleFile() == true ? "true" : "false") << endl;
   cerr << "  use independence prior | --use-independence-prior   | " << (defaults.getUseIndependencePrior() == true ? "true" : "false") << endl;
   cerr << "  calculate pairs        | --calculate-pairs          | " << (defaults.getCalculatePairs() == true ? "true" : "false") << endl;
-  cerr << "  use update groups      | --use-update-groups        | " << (defaults.getUseUpdateGroups() == true ? "true" : "false") << endl;
   cerr << "  taxon set              | -p prune-file              | common taxa" << endl;
-  cerr << "  use update groups      | --do-not-use-update-groups |" << endl;
+  cerr << "  use update groups      | --use-update-groups        | " << (defaults.getUseUpdateGroups() == true ? "true" : "false") << endl;
+  cerr << "  use update groups      | --do-not-use-update-groups | " << endl;
+  cerr << "  Space optimization     | --opt-space                | " << (defaults.shouldOptSpace() == true ? "true" : "false") << endl;
   cerr << "  help                   | -h OR --help               |" << endl;
   cerr << "  version                | --version                  |" << endl;
   cerr << "  -------------------------------------------------------------------" << endl << endl;
