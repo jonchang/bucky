@@ -1,5 +1,6 @@
 #ifndef QUARTETS_H_
 #define QUARTETS_H_
+
 namespace quartet {
 
 class Quartets {
@@ -150,6 +151,82 @@ private:
   vector<Edge *> edges;
   string top;
   Node *root;
+};
+
+class MaxHeap {
+public:
+    void insert(int index, double wt);
+    int remove();
+    double getMaxWt();
+    int getMaxIndex();
+    void print(ostream& f) {
+        for (vector<int>::iterator itr = index.begin(); itr != index.end(); itr++) {
+            f << *itr << ",";
+        }
+        f << endl;
+
+        for (vector<double>::iterator itr = weights.begin(); itr != weights.end(); itr++) {
+            f << *itr << ",";
+        }
+        f << endl << endl;
+    }
+private:
+    vector<double> weights;
+    vector<int> index;
+};
+
+class SuperNode {
+public:
+    SuperNode(int n, int lf) {
+        node =  new Node(n, lf);
+        if (lf)
+            numLeafs = 1;
+        else
+            numLeafs = 0;
+    }
+
+    void add(SuperNode *lc, SuperNode *rc) {
+        numLeafs = lc->numLeafs + rc->numLeafs;
+        left = lc;
+        right = rc;
+    }
+
+    int getNumNodes() {
+        return numLeafs;
+    }
+
+    void print(ostream& f) {
+        if (node->isLeaf()) {
+            f << node->getNumber();
+            return;
+        }
+
+        f << "(";
+        if (left != NULL) {
+            left->print(f);
+        }
+        if (right != NULL) {
+            f << ",";
+            right->print(f);
+        }
+        f << ")";
+    }
+private:
+    Node* node;
+    int numLeafs;
+    // each supernode can refer to two other supernodes at max except for root?
+    SuperNode *left;
+    SuperNode *right;
+};
+
+class TreeBuilder {
+public:
+    string getTree(Table* newTable, int numTaxa);
+private:
+    string getTreeFromQuartetCounts(vector<vector<double> >& counts, int numQuartets, int numTaxa);
+    double computeConfidence(int m, int n, vector<int>& activeNodes, vector<vector<double> >& counts);
+    int computeCardinality(int m, int n, vector<int>& activeNodes);
+    vector<SuperNode*> superNodes;
 };
 }
 #endif /* QUARTETS_H_ */

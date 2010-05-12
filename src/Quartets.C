@@ -6,28 +6,56 @@
 #include<sstream>
 #include<cassert>
 #include<algorithm>
-#include <functional>
+#include<functional>
+#include<set>
 using namespace std;
+#include "boost/unordered_map.hpp"
+using namespace boost;
+#include "TGM.h"
 #include "Quartets.h"
 using namespace quartet;
 
-//compute nCr
-int choose(int n, int r) {
-    if (n < r) return 0;
-    if (r > n - r) // save computations by evaluating nCn-r if n-r is smaller than r
-        r = n - r;
-
-    double val = 1.0;
-    for (int i = 1; i <= r; i++) {
-        val *= (n - i + 1) / (double) i;
+vector<vector<int> > nCr;
+void precomputeNcR(int numTaxa) {
+    // compute nC1, nC2, nC3, nC4 for n in [0, numTaxa - 1], this is used for ranking quartets
+    for (int i = 0; i < numTaxa; i++) {
+        double val = 1.0;
+        vector<int> iCj;
+        int k = 1;
+        for (int j = 1; j <= 4; j++) {
+            //compute iCj and store it in vector nCr
+            for (; k <= j; k++) {
+                val *= (i - k + 1) / (double) k;
+            }
+            cerr << i << " choose " << j << " is " << val << endl;
+            iCj.push_back((int) val);
+        }
+        nCr.push_back(iCj);
     }
 
-    return (int) val;
+    // compute nC1, nC2 for n in [numTaxa, numTaxa + numTaxa - 3], this is used
+    // for converting index in support vector to corresponding super nodes
+    int numSuperNodes = 2 * numTaxa - 3;
+    for (int i = numTaxa; i < numSuperNodes; i++) {
+        double val = 1.0;
+        vector<int> iCj;
+        int k = 1;
+        for (int j = 1; j <= 2; j++) {
+            //compute iCj and store it in vector nCr
+            for (; k <= j; k++) {
+                val *= (i - k + 1) / (double) k;
+            }
+            cerr << i << " choose " << j << " is " << val << endl;
+            iCj.push_back((int) val);
+        }
+        nCr.push_back(iCj);
+    }
 }
 
 int computeRIndex(int t1, int t2, int t3, int t4) {
-    //compute subset rank. assume sorted order is t1, t2, t3, t4
-    return choose(t1 - 1, 1) + choose(t2 - 1, 2) + choose(t3 - 1, 3) + choose(t4 - 1, 4);
+    //compute subset rank. assume sorted order is t1, t2, t3, t4 -
+    // rank for a quartet can be obtained by computing t1 Choose 1 + t2 Choose 2 + t3 Choose 3 + t4 Choose 4
+    return nCr[t1 - 1][0] + nCr[t2 - 1][1] + nCr[t3 - 1][2] + nCr[t4 - 1][3];
 }
 
 void getQuartetRowColumnIndex(int t1, int t2, int t3, int t4, int& rIndex, int& cIndex) {
@@ -77,6 +105,318 @@ void getQuartetRowColumnIndex(int t1, int t2, int t3, int t4, int& rIndex, int& 
             rIndex = computeRIndex(t1, t3, t4, t2);
         }
     }
+}
+
+void MaxHeap::insert(int ind, double wt)
+{
+    int pos = weights.size();
+    weights.push_back(wt);
+    index.push_back(ind);
+    while (pos > 0) {
+        int parentPos = (pos - 1) /2;
+        if (weights[parentPos] < weights[pos]) {
+            //swap weights to satisfy max heap property
+            double temp = weights[parentPos];
+            weights[parentPos] = weights[pos];
+            weights[pos] = temp;
+
+            //swap corresponding index
+            int tmp = index[parentPos];
+            index[parentPos] = index[pos];
+            index[pos] = tmp;
+
+            //move up
+            pos = parentPos;
+        }
+        else {
+            break;
+        }
+    }
+}
+
+int MaxHeap::remove()
+{
+    double lastWt = weights[weights.size() - 1];
+    weights[0] = lastWt;//replace root with last element
+    int firstIndex = index[0];
+    index[0] = index[index.size() - 1];
+    weights.erase(weights.begin() + weights.size() - 1);//erase last element
+    index.erase(index.begin() + index.size() - 1);//erase corresponding index
+
+    // if required, move the root down and make sure array satisfies max heap property
+    int parent = 0;
+    while (true) {
+        int firstChild = 2 * parent + 1;
+        int secondChild = firstChild + 1;
+        if (!(firstChild < weights.size() && weights[firstChild] > weights[parent]) && !(secondChild < weights.size() && weights[secondChild] > weights[parent]))
+            break;// if parent is greater than both of its childs, we're done
+        int swapIndex;
+        if (secondChild < weights.size() && weights[secondChild] > weights[firstChild]) {
+            swapIndex = secondChild;
+        }
+        else {
+            swapIndex = firstChild;
+        }
+
+        double temp = weights[swapIndex];
+        weights[swapIndex] = weights[parent];
+        weights[parent] = temp;
+
+        int tmp = index[swapIndex];
+        index[swapIndex] = index[parent];
+        index[parent] = tmp;
+
+        parent = swapIndex;
+    }
+
+    return firstIndex;
+}
+
+double MaxHeap::getMaxWt()
+{
+    if (weights.size() == 0)
+        return -1.0;
+
+    return weights[0];
+}
+
+int MaxHeap::getMaxIndex() {
+    if (index.size() == 0)
+        return -1;
+
+    return index[0];
+}
+
+
+string TreeBuilder::getTree(Table* newTable, int numTaxa) {
+    vector<string> topologies = newTable->getTopologies();
+    precomputeNcR(numTaxa);
+    int numNodes = numTaxa + numTaxa - 3;
+    int numQuartets = numNodes * (numNodes - 1) * (numNodes - 2) * (numNodes -3) / 24;
+    vector<vector<double> > counts;
+    counts.resize(numQuartets);//(numTaxa -3) new super nodes are created
+    for (int i = 0; i < counts.size(); i++) {
+        counts[i].resize(3, 0.0);
+    }
+
+    for (int i = 0; i < topologies.size(); i++) {
+        double totalCount = newTable->getTotalCounts(i);
+        Tree t(numTaxa, topologies[i]);
+        vector<int> rind, cind;
+        t.getQuartets(rind, cind);
+        for (int i = 0; i < rind.size(); i++) {
+            counts[rind[i]][cind[i]] += totalCount;
+        }
+    }
+
+    cerr << "Before normalizing\n";
+    for (int i = 0; i < numQuartets; i++) {
+        cerr << counts[i][0] << "," << counts[i][1] << "," << counts[i][2] << endl;
+    }
+
+
+    // normalize counts.
+    // current version: resolution with biggest count gets probability 1, other two get 0
+    // TODO: if three counts are approximately equal, may need to split into 0.3333 each
+    for (int i = 0; i < numQuartets; i++) {
+        if (counts[i][0] > counts[i][1]) {
+            if (counts[i][0] > counts[i][2]) {
+                counts[i][0] = 1;
+                counts[i][1] = 0;
+                counts[i][2] = 0;
+            }
+            else {
+                counts[i][0] = 0;
+                counts[i][1] = 0;
+                counts[i][2] = 1;
+            }
+        }
+        else if (counts[i][1] > counts[i][2]) {
+            counts[i][0] = 0;
+            counts[i][1] = 1;
+            counts[i][2] = 0;
+        }
+        else {
+            counts[i][0] = 0;
+            counts[i][1] = 0;
+            counts[i][2] = 1;
+        }
+    }
+
+    cerr << "After normalizing\n";
+    for (int i = 0; i < numQuartets; i++) {
+        cerr << counts[i][0] << "," << counts[i][1] << "," << counts[i][2] << endl;
+    }
+
+    return getTreeFromQuartetCounts(counts, numQuartets, numTaxa);
+}
+
+string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> >& counts, int numQuartets, int numTaxa) {
+    int numNodes = numTaxa + numTaxa - 3;
+    for (int i = 0; i < numNodes; i++) {
+        superNodes.push_back(new SuperNode(i + 1, i < numTaxa));
+    }
+
+    vector<int> activeNodes;
+    for (int i = 0; i < numTaxa; i++) {
+        activeNodes.push_back(i + 1);
+    }
+
+    vector<vector<double> > confidence(numNodes, vector<double>(numNodes, 0));
+    vector<vector<double> > size(numNodes, vector<double>(numNodes, 0));
+    vector<vector<double> > support(numNodes, vector<double>(numNodes, 0));
+    for (int j = 1; j <= numTaxa; j++) {
+        for (int i = 1; i < j; i++) {
+            confidence[i - 1][j -1] = computeConfidence(i, j, activeNodes, counts);
+            size[i - 1][j - 1] = computeCardinality(i, j, activeNodes);
+            support[i -1][j - 1] = confidence[i - 1][j -1]/size[i - 1][j - 1];
+        }
+    }
+
+    for (int i = 0; i < confidence.size(); i++) {
+        for (int j = 0; j < i; j++)
+            cerr << confidence[j][i] << " ";
+    }
+    cerr << endl << endl;
+
+    for (int i = 0; i < confidence.size(); i++) {
+        for (int j = 0; j < i; j++)
+            cerr << size[j][i] << " ";
+    }
+    cerr << endl << endl;
+
+    for (int i = 0; i < confidence.size(); i++) {
+        for (int j = 0; j < i; j++)
+            cerr << support[j][i] << " ";
+    }
+    cerr << endl << endl;
+
+    int currentNode = numTaxa;
+    while (activeNodes.size() > 3) {
+        int maxI = activeNodes[0], maxJ = activeNodes[1];
+        double maxSupport = support[maxI - 1][maxJ - 1];
+        for (int j = 0; j < activeNodes.size(); j++) {
+            int node1 = activeNodes[j];
+            for (int i = j + 1; i < activeNodes.size(); i++) {
+                int node2 = activeNodes[i];
+                if (support[node1 - 1][node2 - 1] > maxSupport) {
+                    maxSupport = support[node1 - 1][node2 - 1];
+                    maxI = node1;
+                    maxJ = node2;
+                }
+            }
+        }
+        currentNode++;
+        superNodes[currentNode - 1]->add(superNodes[maxI - 1], superNodes[maxJ - 1]);
+        cerr << "Trying 2 erase " << maxI << " " << maxJ << " from activenodes " << activeNodes.size() << endl;
+        vector<int>::iterator itr = find(activeNodes.begin(), activeNodes.end(), maxI);
+        assert(itr != activeNodes.end());
+        activeNodes.erase(itr);
+        itr = find(activeNodes.begin(), activeNodes.end(), maxJ);
+        assert(itr != activeNodes.end());
+        activeNodes.erase(itr);
+        cerr << "Erased " << maxI << " " << maxJ << " from activenodes " << activeNodes.size() << endl;
+
+        for (int i = 0; i < activeNodes.size(); i++) {
+            cerr << activeNodes[i] << " ";
+        }
+cerr << endl << endl;
+        for (int i = 0; i < activeNodes.size(); i++) {
+            int node1 = activeNodes[i];
+            for (int j = i + 1; j < activeNodes.size(); j++) {
+                int node2 = activeNodes[j];
+                for (int k = j + 1; k < activeNodes.size(); k++) {
+                    int node3 = activeNodes[k];
+                    //find weights of 3 different resolutions for node1, node2, node3 and currentNode
+                    int rInd1, cInd1, rInd2, cInd2;
+                    getQuartetRowColumnIndex(node1, node2, node3, maxI, rInd1, cInd1);
+                    getQuartetRowColumnIndex(node1, node2, node3, maxJ, rInd2, cInd2);
+
+                    int rIndResult, cIndResult;
+                    getQuartetRowColumnIndex(node1, node2, node3, currentNode, rIndResult, cIndResult);
+                    counts[rIndResult][0] = counts[rInd1][0] + counts[rInd2][0];
+                    counts[rIndResult][1] = counts[rInd1][1] + counts[rInd2][1];
+                    counts[rIndResult][2] = counts[rInd1][2] + counts[rInd2][2];
+                }
+            }
+
+        }
+
+        //compute confidence, support for newnode and every other active node
+        for (int i = 0; i < activeNodes.size(); i++) {
+            int node1 = activeNodes[i];
+            confidence[node1 - 1][currentNode - 1] = computeConfidence(node1, currentNode, activeNodes, counts);
+            size[node1 - 1][currentNode - 1] = computeCardinality(node1, currentNode, activeNodes);
+            support[node1 - 1][currentNode - 1] = confidence[node1 - 1][currentNode - 1] /size[node1 - 1][currentNode - 1];
+        }
+
+        // modify confidence, support of active node pairs from previous iteration
+        for (int i = 0; i < activeNodes.size(); i++) {
+            int node1 = activeNodes[i];
+            for (int j = i + 1; j < activeNodes.size(); j++) {
+                int node2 = activeNodes[j];
+                int rind, cind;
+                getQuartetRowColumnIndex(maxI, maxJ, node1, node2, rind, cind);
+                confidence[node1 - 1][node2 - 1] -=  counts[rind][cind];
+                size[node1 - 1][node2 - 1] -= superNodes[maxI - 1]->getNumNodes()
+                        * superNodes[maxJ - 1]->getNumNodes()
+                        * superNodes[node1 - 1]->getNumNodes()
+                        * superNodes[node2-1]->getNumNodes();
+
+                support[node1 -1][node2 - 1] = confidence[node1 - 1][node2 - 1] / size [node1 - 1][node2 - 1];
+            }
+        }
+        activeNodes.push_back(currentNode);
+    }
+
+    stringstream top;
+    top << "(";
+    superNodes[activeNodes[0] - 1]->print(top);
+    top << ",(";
+    superNodes[activeNodes[1] - 1]->print(top);
+    top << ",";
+    superNodes[activeNodes[2] - 1]->print(top);
+    top << ");";
+    return top.str();
+}
+
+double TreeBuilder::computeConfidence(int m, int n, vector<int>& activeNodes, vector<vector<double> >& counts) {
+    double confidence = 0.0;
+    for (int i = 0; i < activeNodes.size(); i++) {
+        int node1 = activeNodes[i];
+        if (node1 == m || node1 == n)
+            continue;
+        for (int j = i + 1; j < activeNodes.size(); j++) {
+            int node2 = activeNodes[j];
+            if (node2 == m || node2 == n)
+                continue;
+
+            int rIndex, cIndex;
+            getQuartetRowColumnIndex(m, n, node1, node2, rIndex, cIndex);
+            confidence += counts[rIndex][cIndex];
+        }
+    }
+
+    return confidence;
+}
+
+int TreeBuilder::computeCardinality(int m, int n, vector<int>& activeNodes) {
+    int cardinality = 0;
+    for (int i = 0; i < activeNodes.size(); i++) {
+        int node1 = activeNodes[i];
+        if (node1 == m || node1 == n)
+            continue;
+        for (int j = i + 1; j < activeNodes.size(); j++) {
+            int node2 = activeNodes[j];
+            if (node2 == m || node2 == n)
+                continue;
+
+            cardinality += superNodes[node1 - 1]->getNumNodes() * superNodes[node2 - 1]->getNumNodes();
+        }
+    }
+
+    cardinality *= superNodes[m - 1]->getNumNodes() * superNodes[n - 1]->getNumNodes();
+    return cardinality;
 }
 
 Node* Node::getNeighbor(int i) const { return edges[i]->getOtherNode(this); }
@@ -375,10 +715,37 @@ int main(int argc, char *argv[]) {
 //    string top = "((1,2),((3,4),(5,6)));";
 //    string top = "(((((1,2),3),4),5),6);";
 //        string top = "(1,((2,3),4));";
-    Tree t(6, top);
-    t.print(cerr);
-    vector<vector<int> > quartets;
-    vector<int> rInd, cInd;
-    t.getQuartets(rInd,cInd);
-//    computeRIndex(1, 2, 3, 6);
+
+
+      vector<string> topologies;
+      topologies.push_back(top);
+      Table *newTable = new TGM(topologies);
+      newTable->addGeneCount(0,0,10);
+      newTable->addGeneCount(0,1,10);
+      newTable->addGeneCount(0,2,10);
+      newTable->addGeneCount(0,3,10);
+
+      TreeBuilder t;
+      top = t.getTree(newTable, 6);
+      cerr << "Final topology: " << top<< endl;
+//      precomputeNcR(7);
+//    MaxHeap h;
+//    h.insert(0, 5);
+//    h.print(cerr);
+//    h.insert(1, 7);
+//    h.print(cerr);
+//    h.insert(2, 7);
+//    h.print(cerr);
+//    h.insert(3, 26);
+//    h.print(cerr);
+//    h.insert(4, 90);
+//    h.print(cerr);
+//    h.insert(5, 100);
+//    h.print(cerr);
+//    h.remove();
+//    h.print(cerr);
+//    h.remove();
+//    h.print(cerr);
+//    h.remove();
+//    h.print(cerr);
 }
