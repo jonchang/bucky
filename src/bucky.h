@@ -17,6 +17,7 @@
 #include "Rand.h"
 #include "Alias.h"
 #include "TGM.h"
+#include "Quartets.h"
 using namespace std;
 
 static double LOG_ZERO = log(0);

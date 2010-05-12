@@ -153,46 +153,39 @@ private:
   Node *root;
 };
 
-class MaxHeap {
-public:
-    void insert(int index, double wt);
-    int remove();
-    double getMaxWt();
-    int getMaxIndex();
-    void print(ostream& f) {
-        for (vector<int>::iterator itr = index.begin(); itr != index.end(); itr++) {
-            f << *itr << ",";
-        }
-        f << endl;
-
-        for (vector<double>::iterator itr = weights.begin(); itr != weights.end(); itr++) {
-            f << *itr << ",";
-        }
-        f << endl << endl;
-    }
-private:
-    vector<double> weights;
-    vector<int> index;
-};
-
 class SuperNode {
 public:
     SuperNode(int n, int lf) {
         node =  new Node(n, lf);
-        if (lf)
+        if (lf) {
             numLeafs = 1;
-        else
+            lowestTaxon = n;
+        }
+        else {
             numLeafs = 0;
+        }
     }
 
     void add(SuperNode *lc, SuperNode *rc) {
         numLeafs = lc->numLeafs + rc->numLeafs;
-        left = lc;
-        right = rc;
+        if (lc->lowestTaxon < rc->lowestTaxon) {
+            left = lc;
+            right = rc;
+            lowestTaxon = lc->lowestTaxon;
+        }
+        else {
+            left = rc;
+            right = lc;
+            lowestTaxon = rc->lowestTaxon;
+        }
     }
 
     int getNumNodes() {
         return numLeafs;
+    }
+
+    int getLowestTaxon() {
+        return lowestTaxon;
     }
 
     void print(ostream& f) {
@@ -214,6 +207,7 @@ public:
 private:
     Node* node;
     int numLeafs;
+    int lowestTaxon;
     // each supernode can refer to two other supernodes at max except for root?
     SuperNode *left;
     SuperNode *right;
@@ -223,7 +217,7 @@ class TreeBuilder {
 public:
     string getTree(Table* newTable, int numTaxa);
 private:
-    string getTreeFromQuartetCounts(vector<vector<double> >& counts, int numQuartets, int numTaxa);
+    string getTreeFromQuartetCounts(vector<vector<double> >& counts, int numTaxa);
     double computeConfidence(int m, int n, vector<int>& activeNodes, vector<vector<double> >& counts);
     int computeCardinality(int m, int n, vector<int>& activeNodes);
     vector<SuperNode*> superNodes;

@@ -14,7 +14,7 @@ private:
     int index;
 };
 
-bool cmpTreeWeights(TreeWeight x,TreeWeight y) {  double diff = x.getWeight() - y.getWeight(); if (diff < 0) diff = -diff; if (diff < .00000001) return x.getIndex() < y.getIndex(); return x.getWeight() > y.getWeight(); }
+bool cmpTreeWeights(TreeWeight x,TreeWeight y);
 
 class GeneCounts {
 public:

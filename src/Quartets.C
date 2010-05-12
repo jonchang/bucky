@@ -27,7 +27,6 @@ void precomputeNcR(int numTaxa) {
             for (; k <= j; k++) {
                 val *= (i - k + 1) / (double) k;
             }
-            cerr << i << " choose " << j << " is " << val << endl;
             iCj.push_back((int) val);
         }
         nCr.push_back(iCj);
@@ -45,7 +44,6 @@ void precomputeNcR(int numTaxa) {
             for (; k <= j; k++) {
                 val *= (i - k + 1) / (double) k;
             }
-            cerr << i << " choose " << j << " is " << val << endl;
             iCj.push_back((int) val);
         }
         nCr.push_back(iCj);
@@ -107,87 +105,6 @@ void getQuartetRowColumnIndex(int t1, int t2, int t3, int t4, int& rIndex, int& 
     }
 }
 
-void MaxHeap::insert(int ind, double wt)
-{
-    int pos = weights.size();
-    weights.push_back(wt);
-    index.push_back(ind);
-    while (pos > 0) {
-        int parentPos = (pos - 1) /2;
-        if (weights[parentPos] < weights[pos]) {
-            //swap weights to satisfy max heap property
-            double temp = weights[parentPos];
-            weights[parentPos] = weights[pos];
-            weights[pos] = temp;
-
-            //swap corresponding index
-            int tmp = index[parentPos];
-            index[parentPos] = index[pos];
-            index[pos] = tmp;
-
-            //move up
-            pos = parentPos;
-        }
-        else {
-            break;
-        }
-    }
-}
-
-int MaxHeap::remove()
-{
-    double lastWt = weights[weights.size() - 1];
-    weights[0] = lastWt;//replace root with last element
-    int firstIndex = index[0];
-    index[0] = index[index.size() - 1];
-    weights.erase(weights.begin() + weights.size() - 1);//erase last element
-    index.erase(index.begin() + index.size() - 1);//erase corresponding index
-
-    // if required, move the root down and make sure array satisfies max heap property
-    int parent = 0;
-    while (true) {
-        int firstChild = 2 * parent + 1;
-        int secondChild = firstChild + 1;
-        if (!(firstChild < weights.size() && weights[firstChild] > weights[parent]) && !(secondChild < weights.size() && weights[secondChild] > weights[parent]))
-            break;// if parent is greater than both of its childs, we're done
-        int swapIndex;
-        if (secondChild < weights.size() && weights[secondChild] > weights[firstChild]) {
-            swapIndex = secondChild;
-        }
-        else {
-            swapIndex = firstChild;
-        }
-
-        double temp = weights[swapIndex];
-        weights[swapIndex] = weights[parent];
-        weights[parent] = temp;
-
-        int tmp = index[swapIndex];
-        index[swapIndex] = index[parent];
-        index[parent] = tmp;
-
-        parent = swapIndex;
-    }
-
-    return firstIndex;
-}
-
-double MaxHeap::getMaxWt()
-{
-    if (weights.size() == 0)
-        return -1.0;
-
-    return weights[0];
-}
-
-int MaxHeap::getMaxIndex() {
-    if (index.size() == 0)
-        return -1;
-
-    return index[0];
-}
-
-
 string TreeBuilder::getTree(Table* newTable, int numTaxa) {
     vector<string> topologies = newTable->getTopologies();
     precomputeNcR(numTaxa);
@@ -209,16 +126,11 @@ string TreeBuilder::getTree(Table* newTable, int numTaxa) {
         }
     }
 
-    cerr << "Before normalizing\n";
-    for (int i = 0; i < numQuartets; i++) {
-        cerr << counts[i][0] << "," << counts[i][1] << "," << counts[i][2] << endl;
-    }
-
-
     // normalize counts.
+    int numOfCurrentQuartets = nCr[numTaxa - 1][2] + nCr[numTaxa - 1][3]; //C(numTaxa,4)  = C(numTaxa - 1, 3) + C(numTaxa - 1, 4)
     // current version: resolution with biggest count gets probability 1, other two get 0
     // TODO: if three counts are approximately equal, may need to split into 0.3333 each
-    for (int i = 0; i < numQuartets; i++) {
+    for (int i = 0; i < numOfCurrentQuartets; i++) {
         if (counts[i][0] > counts[i][1]) {
             if (counts[i][0] > counts[i][2]) {
                 counts[i][0] = 1;
@@ -243,15 +155,10 @@ string TreeBuilder::getTree(Table* newTable, int numTaxa) {
         }
     }
 
-    cerr << "After normalizing\n";
-    for (int i = 0; i < numQuartets; i++) {
-        cerr << counts[i][0] << "," << counts[i][1] << "," << counts[i][2] << endl;
-    }
-
-    return getTreeFromQuartetCounts(counts, numQuartets, numTaxa);
+    return getTreeFromQuartetCounts(counts, numTaxa);
 }
 
-string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> >& counts, int numQuartets, int numTaxa) {
+string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> >& counts, int numTaxa) {
     int numNodes = numTaxa + numTaxa - 3;
     for (int i = 0; i < numNodes; i++) {
         superNodes.push_back(new SuperNode(i + 1, i < numTaxa));
@@ -273,26 +180,8 @@ string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> >& counts, in
         }
     }
 
-    for (int i = 0; i < confidence.size(); i++) {
-        for (int j = 0; j < i; j++)
-            cerr << confidence[j][i] << " ";
-    }
-    cerr << endl << endl;
-
-    for (int i = 0; i < confidence.size(); i++) {
-        for (int j = 0; j < i; j++)
-            cerr << size[j][i] << " ";
-    }
-    cerr << endl << endl;
-
-    for (int i = 0; i < confidence.size(); i++) {
-        for (int j = 0; j < i; j++)
-            cerr << support[j][i] << " ";
-    }
-    cerr << endl << endl;
-
     int currentNode = numTaxa;
-    while (activeNodes.size() > 3) {
+    while (true) {
         int maxI = activeNodes[0], maxJ = activeNodes[1];
         double maxSupport = support[maxI - 1][maxJ - 1];
         for (int j = 0; j < activeNodes.size(); j++) {
@@ -308,19 +197,18 @@ string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> >& counts, in
         }
         currentNode++;
         superNodes[currentNode - 1]->add(superNodes[maxI - 1], superNodes[maxJ - 1]);
-        cerr << "Trying 2 erase " << maxI << " " << maxJ << " from activenodes " << activeNodes.size() << endl;
         vector<int>::iterator itr = find(activeNodes.begin(), activeNodes.end(), maxI);
         assert(itr != activeNodes.end());
         activeNodes.erase(itr);
         itr = find(activeNodes.begin(), activeNodes.end(), maxJ);
         assert(itr != activeNodes.end());
         activeNodes.erase(itr);
-        cerr << "Erased " << maxI << " " << maxJ << " from activenodes " << activeNodes.size() << endl;
 
-        for (int i = 0; i < activeNodes.size(); i++) {
-            cerr << activeNodes[i] << " ";
+        if (activeNodes.size() == 2) {
+            activeNodes.push_back(currentNode); //quit when there are 3 active nodes(super nodes)
+            break;
         }
-cerr << endl << endl;
+
         for (int i = 0; i < activeNodes.size(); i++) {
             int node1 = activeNodes[i];
             for (int j = i + 1; j < activeNodes.size(); j++) {
@@ -369,14 +257,51 @@ cerr << endl << endl;
         activeNodes.push_back(currentNode);
     }
 
+    SuperNode *node1, *node2, *node3;
+    if (superNodes[activeNodes[2] - 1]->getLowestTaxon() < superNodes[activeNodes[1] - 1]->getLowestTaxon()) {
+        if (superNodes[activeNodes[2] - 1]->getLowestTaxon() < superNodes[activeNodes[0] - 1]->getLowestTaxon()) {
+            node1 = superNodes[activeNodes[2] - 1];
+            if (superNodes[activeNodes[0] - 1]->getLowestTaxon() < superNodes[activeNodes[1] - 1]->getLowestTaxon()) {
+                node2 =superNodes[activeNodes[0] - 1];
+                node3 = superNodes[activeNodes[1] - 1];
+            }
+            else {
+                node2 =superNodes[activeNodes[1] - 1];
+                node3 = superNodes[activeNodes[0] - 1];
+            }
+        }
+        else {
+            node1 = superNodes[activeNodes[0] - 1];
+            node2 =superNodes[activeNodes[2] - 1];
+            node3 = superNodes[activeNodes[1] - 1];
+        }
+    }
+    else {
+        if (superNodes[activeNodes[1] - 1]->getLowestTaxon() < superNodes[activeNodes[0] - 1]->getLowestTaxon()) {
+            node1 = superNodes[activeNodes[1] - 1];
+            if (superNodes[activeNodes[2] - 1]->getLowestTaxon() < superNodes[activeNodes[0] - 1]->getLowestTaxon()) {
+                node2 =superNodes[activeNodes[2] - 1];
+                node3 = superNodes[activeNodes[0] - 1];
+            }
+            else {
+                node2 =superNodes[activeNodes[0] - 1];
+                node3 = superNodes[activeNodes[2] - 1];
+            }
+        }
+        else {
+            node1 = superNodes[activeNodes[0] - 1];
+            node2 = superNodes[activeNodes[1] - 1];
+            node3 = superNodes[activeNodes[2] - 1];
+        }
+    }
     stringstream top;
     top << "(";
-    superNodes[activeNodes[0] - 1]->print(top);
+    node1->print(top);
     top << ",(";
-    superNodes[activeNodes[1] - 1]->print(top);
+    node2->print(top);
     top << ",";
-    superNodes[activeNodes[2] - 1]->print(top);
-    top << ");";
+    node3->print(top);
+    top << "));";
     return top.str();
 }
 
@@ -700,7 +625,7 @@ void Tree::getQuartets(vector<int>& rInd, vector<int>& cInd) {
                             rInd.push_back(rIndex);
                             cInd.push_back(cIndex);
                             quartets.push_back(quartet);
-                            cerr << tsets[0][j1] << "," << tsets[1][j2] << "|" << tsets[2][j3] << "," << tsets[3][j4] << " Row:" << rIndex << ", Column:" << cIndex << "\n";
+//                            cerr << tsets[0][j1] << "," << tsets[1][j2] << "|" << tsets[2][j3] << "," << tsets[3][j4] << " Row:" << rIndex << ", Column:" << cIndex << "\n";
                         }
                     }
                 }
@@ -709,7 +634,7 @@ void Tree::getQuartets(vector<int>& rInd, vector<int>& cInd) {
     }
 }
 
-int main(int argc, char *argv[]) {
+/*int main(int argc, char *argv[]) {
 //    string top = "(1,(2,(3,(4,(5,6)))));";
       string top = "(((1,4),2),(3,(5,6)));";
 //    string top = "((1,2),((3,4),(5,6)));";
@@ -728,24 +653,4 @@ int main(int argc, char *argv[]) {
       TreeBuilder t;
       top = t.getTree(newTable, 6);
       cerr << "Final topology: " << top<< endl;
-//      precomputeNcR(7);
-//    MaxHeap h;
-//    h.insert(0, 5);
-//    h.print(cerr);
-//    h.insert(1, 7);
-//    h.print(cerr);
-//    h.insert(2, 7);
-//    h.print(cerr);
-//    h.insert(3, 26);
-//    h.print(cerr);
-//    h.insert(4, 90);
-//    h.print(cerr);
-//    h.insert(5, 100);
-//    h.print(cerr);
-//    h.remove();
-//    h.print(cerr);
-//    h.remove();
-//    h.print(cerr);
-//    h.remove();
-//    h.print(cerr);
-}
+}*/

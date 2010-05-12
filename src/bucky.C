@@ -188,7 +188,7 @@ bool getTaxaSubset(vector<string> inputFiles, vector<bool>& hasTtable, map<strin
     fileNum = 0;
     maxTaxa = taxaNames.size();
   }
-  else { 
+  else {
     bool hasTable = getTaxa(inputFiles[0], taxaNames, translateMap);
     if (!hasTable) {
       cerr << "\nBucky cannot find the translate table in " << inputFiles[0]
@@ -299,9 +299,7 @@ bool readFile(string filename, int i, Table*& tgm, int &max,
 
   map<int, int> translateID;
   // in case the numbers in the translate table are not from 1 to Ntax
-  // translateID[i] = ID given to the taxon on line i+1 in the gene file
-  // Cecile: I think the comment above is incorrect. It looks like 
-  // translateID[ taxon number given in the input file] = ID given in 
+  // translateID[ taxon number given in the input file] = ID given in
   // bucky's translate table used, common for all genes.
 
   string keyword;
@@ -1355,7 +1353,7 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
 		 int numGenes,RunParameters& rp,ModelParameters& mp,Table *newTable,
 		 vector<vector<int> >& clusterCount, vector<TaxonSet>& splits,  vector<vector<vector<int> > >& splitsGeneMatrix,
 		 vector<vector<int> >& pairCounts,   vector<Gene*>& genes, vector<double>& alphas,
-		 vector<vector<int> >& mcmcmcAccepts,vector<vector<int> >& mcmcmcProposals, vector<string>& translateTable)
+		 vector<vector<int> >& mcmcmcAccepts,vector<vector<int> >& mcmcmcProposals, vector<string>& translateTable, string quartetTree)
 {
   // .joint
   if(rp.getCreateJointFile()) {
@@ -1597,6 +1595,8 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
     taxaNum++;
   }
 
+  concordanceStr << "Tree from Quartet Joining:" << endl;
+  concordanceStr << quartetTree << endl;
   ConcordanceTree z(tset,numGenes);
   concordanceStr << "Primary Concordance Tree Topology:" << endl;
   z.printTopology(concordanceStr);
@@ -2240,9 +2240,12 @@ int main(int argc, char *argv[])
 	 delete sampleFileStr[irun];
     }
 
+  quartet::TreeBuilder tb;
+  string quartetTree = tb.getTree(newTable, numTaxa);
+
   writeOutput(fout,fileNames,max,numTrees,numTaxa,topologies,numGenes,rp,mp,
 	      newTable,clusterCount,splits,splitsGeneMatrix,
-	      pairCounts,genes,alphas,mcmcmcAccepts,mcmcmcProposals, translateTable);
+	      pairCounts,genes,alphas,mcmcmcAccepts,mcmcmcProposals, translateTable, quartetTree);
 
   for(int i=0;i<numGenes;i++)
     delete genes[i];
