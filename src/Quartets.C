@@ -18,28 +18,12 @@ using namespace quartet;
 vector<vector<int> > nCr;
 void precomputeNcR(int numTaxa) {
     // compute nC1, nC2, nC3, nC4 for n in [0, numTaxa - 1], this is used for ranking quartets
-    for (int i = 0; i < numTaxa; i++) {
+    int numSuperNodes = 2 * numTaxa - 3;
+    for (int i = 0; i < numSuperNodes; i++) {
         double val = 1.0;
         vector<int> iCj;
         int k = 1;
         for (int j = 1; j <= 4; j++) {
-            //compute iCj and store it in vector nCr
-            for (; k <= j; k++) {
-                val *= (i - k + 1) / (double) k;
-            }
-            iCj.push_back((int) val);
-        }
-        nCr.push_back(iCj);
-    }
-
-    // compute nC1, nC2 for n in [numTaxa, numTaxa + numTaxa - 3], this is used
-    // for converting index in support vector to corresponding super nodes
-    int numSuperNodes = 2 * numTaxa - 3;
-    for (int i = numTaxa; i < numSuperNodes; i++) {
-        double val = 1.0;
-        vector<int> iCj;
-        int k = 1;
-        for (int j = 1; j <= 2; j++) {
             //compute iCj and store it in vector nCr
             for (; k <= j; k++) {
                 val *= (i - k + 1) / (double) k;
