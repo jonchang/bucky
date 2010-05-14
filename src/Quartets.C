@@ -201,19 +201,27 @@ string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> >& counts, in
 
         for (int i = 0; i < activeNodes.size(); i++) {
             int node1 = activeNodes[i];
-            for (int j = 0; j < activeNodes.size(); j++) {
-                if (i == j) continue;
+            for (int j = i + 1; j < activeNodes.size(); j++) {
                 int node2 = activeNodes[j];
-                for (int k = 0; k < activeNodes.size(); k++) {
-                    if (k == i || k == j) continue;
+                for (int k = j + 1; k < activeNodes.size(); k++) {
                     int node3 = activeNodes[k];
                     //find weights of 3 different resolutions for node1, node2, node3 and currentNode
                     int rInd1, cInd1, rInd2, cInd2;
+                    int rIndResult, cIndResult;
+
                     getQuartetRowColumnIndex(node1, node2, node3, maxI, rInd1, cInd1);
                     getQuartetRowColumnIndex(node1, node2, node3, maxJ, rInd2, cInd2);
-
-                    int rIndResult, cIndResult;
                     getQuartetRowColumnIndex(node1, node2, node3, currentNode, rIndResult, cIndResult);
+                    counts[rIndResult][cIndResult] = counts[rInd1][cInd1] + counts[rInd2][cInd2];
+
+                    getQuartetRowColumnIndex(node1, node3, node2, maxI, rInd1, cInd1);
+                    getQuartetRowColumnIndex(node1, node3, node2, maxJ, rInd2, cInd2);
+                    getQuartetRowColumnIndex(node1, node3, node2, currentNode, rIndResult, cIndResult);
+                    counts[rIndResult][cIndResult] = counts[rInd1][cInd1] + counts[rInd2][cInd2];
+
+                    getQuartetRowColumnIndex(node3, node2, node1, maxI, rInd1, cInd1);
+                    getQuartetRowColumnIndex(node3, node2, node1, maxJ, rInd2, cInd2);
+                    getQuartetRowColumnIndex(node3, node2, node1, currentNode, rIndResult, cIndResult);
                     counts[rIndResult][cIndResult] = counts[rInd1][cInd1] + counts[rInd2][cInd2];
                 }
             }
@@ -284,6 +292,8 @@ string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> >& counts, in
             node3 = superNodes[activeNodes[2] - 1];
         }
     }
+
+    //TODO: choose lowest taxon as outgroup
     stringstream top;
     top << "(";
     node1->print(top);

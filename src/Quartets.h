@@ -208,7 +208,7 @@ private:
     Node* node;
     int numLeafs;
     int lowestTaxon;
-    // each supernode can refer to two other supernodes at max except for root?
+    // each supernode can refer to two other supernodes at max except for root
     SuperNode *left;
     SuperNode *right;
 };
