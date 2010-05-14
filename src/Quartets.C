@@ -115,6 +115,11 @@ string TreeBuilder::getTree(Table* newTable, int numTaxa) {
     // current version: resolution with biggest count gets probability 1, other two get 0
     // TODO: if three counts are approximately equal, may need to split into 0.3333 each
     for (int i = 0; i < numOfCurrentQuartets; i++) {
+//        if (counts[i][0] == counts[i][1] && counts[i][1] == counts[i][2]) {
+//            counts[i][0] = .333333;
+//            counts[i][1] = .333333;
+//            counts[i][2] = .333334;
+//        }
         if (counts[i][0] > counts[i][1]) {
             if (counts[i][0] > counts[i][2]) {
                 counts[i][0] = 1;
@@ -179,6 +184,7 @@ string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> >& counts, in
                 }
             }
         }
+
         currentNode++;
         superNodes[currentNode - 1]->add(superNodes[maxI - 1], superNodes[maxJ - 1]);
         vector<int>::iterator itr = find(activeNodes.begin(), activeNodes.end(), maxI);
@@ -195,9 +201,11 @@ string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> >& counts, in
 
         for (int i = 0; i < activeNodes.size(); i++) {
             int node1 = activeNodes[i];
-            for (int j = i + 1; j < activeNodes.size(); j++) {
+            for (int j = 0; j < activeNodes.size(); j++) {
+                if (i == j) continue;
                 int node2 = activeNodes[j];
-                for (int k = j + 1; k < activeNodes.size(); k++) {
+                for (int k = 0; k < activeNodes.size(); k++) {
+                    if (k == i || k == j) continue;
                     int node3 = activeNodes[k];
                     //find weights of 3 different resolutions for node1, node2, node3 and currentNode
                     int rInd1, cInd1, rInd2, cInd2;
@@ -206,9 +214,7 @@ string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> >& counts, in
 
                     int rIndResult, cIndResult;
                     getQuartetRowColumnIndex(node1, node2, node3, currentNode, rIndResult, cIndResult);
-                    counts[rIndResult][0] = counts[rInd1][0] + counts[rInd2][0];
-                    counts[rIndResult][1] = counts[rInd1][1] + counts[rInd2][1];
-                    counts[rIndResult][2] = counts[rInd1][2] + counts[rInd2][2];
+                    counts[rIndResult][cIndResult] = counts[rInd1][cInd1] + counts[rInd2][cInd2];
                 }
             }
 
@@ -403,7 +409,6 @@ void Tree::connect(string top)
             break;
         }
     }
-//    cerr << root->getNumber() << endl;
     TaxonSet* t0 = root->getTset(0);
     TaxonSet* t1 = root->getTset(1);
     TaxonSet* t2 = root->getTset(2);
@@ -477,7 +482,6 @@ Node *Tree::connectThreeNodes(Node* node1,Node* node2,Node* node3,int& currentLe
     node3->mergeTaxa(2, node2, 0);
     node3->mergeTaxa(0, node1, 0);
     node3->mergeTaxa(0, node2, 0);
-//    cerr << "Connect " << node1->getNumber() << " " << node2->getNumber() << " " << node3->getNumber() << endl;
     return node3;
 }
 
@@ -500,7 +504,6 @@ void Tree::connectTwoNodes(Node* node1, Node* node2, int& currentLeafEdge, int& 
     node2->setEdge(0,edge);
     edge->setNode(0,node1);
     edge->setNode(1,node2);
-//    cerr << "Connect " << node1->getNumber() << " " << node2->getNumber() << endl;
 }
 
 int Tree::intersect(vector<int>& t1, vector<int>& t2) {
@@ -528,7 +531,6 @@ int Tree::intersect(vector<int>& t1, vector<int>& t2) {
 }
 
 void Tree::getTsets(vector<vector <int> >& tsets, Node *n1, Node *n2) {
-//    cerr << " NOdes " << n1->getNumber() << " " << n2->getNumber() << endl;
     int i, j;
     int matchI = 0, matchJ = 0;
     int greatestMatch = 0;
@@ -537,7 +539,6 @@ void Tree::getTsets(vector<vector <int> >& tsets, Node *n1, Node *n2) {
         for (j = 0; j < 3; j++) {
             vector<int> t2 = n2->getTaxa(j);
             int match = intersect(t1, t2);
-//            cerr << " intersection size from " << i << ", " << j << " is " << match << " " <<greatestMatch << endl;
             if (match != 0 && match >= greatestMatch) {
                 greatestMatch = match;
                 matchI = i;
@@ -583,7 +584,6 @@ void Tree::getTsets(vector<vector <int> >& tsets, Node *n1, Node *n2) {
             }
         }
     }
-//    cerr << matchI << " " << matchJ << " should be skipped for " << n1->getNumber() << " " << n2->getNumber() << endl;
 }
 
 void Tree::getQuartets(vector<int>& rInd, vector<int>& cInd) {
@@ -609,7 +609,6 @@ void Tree::getQuartets(vector<int>& rInd, vector<int>& cInd) {
                             rInd.push_back(rIndex);
                             cInd.push_back(cIndex);
                             quartets.push_back(quartet);
-//                            cerr << tsets[0][j1] << "," << tsets[1][j2] << "|" << tsets[2][j3] << "," << tsets[3][j4] << " Row:" << rIndex << ", Column:" << cIndex << "\n";
                         }
                     }
                 }
@@ -619,8 +618,8 @@ void Tree::getQuartets(vector<int>& rInd, vector<int>& cInd) {
 }
 
 /*int main(int argc, char *argv[]) {
-//    string top = "(1,(2,(3,(4,(5,6)))));";
-      string top = "(((1,4),2),(3,(5,6)));";
+    string top = "(1,(2,(3,(4,(5,6)))));";
+//      string top = "(((1,4),2),(3,(5,6)));";
 //    string top = "((1,2),((3,4),(5,6)));";
 //    string top = "(((((1,2),3),4),5),6);";
 //        string top = "(1,((2,3),4));";
