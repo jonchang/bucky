@@ -219,7 +219,8 @@ public:
 private:
     string getTreeFromQuartetCounts(vector<vector<double> >& counts, int numTaxa);
     double computeConfidence(int m, int n, vector<int>& activeNodes, vector<vector<double> >& counts);
-    int computeCardinality(int m, int n, vector<int>& activeNodes);
+    double computeNewConfidence(int i, int j, int b, vector<int>& activeNodes, vector<vector<double> >& counts, vector<vector<double> >& confidence);
+    double computeNewCardinality(int maxI, int maxJ, int node1, int numTaxa, vector<int>& activeNodes, vector<vector<double> >& size);
     vector<SuperNode*> superNodes;
 };
 }

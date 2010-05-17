@@ -1,3 +1,4 @@
+#define NDEBUG
 #include<string>
 #include<vector>
 #include<iostream>
@@ -78,11 +79,17 @@ void getQuartetRowColumnIndex(int t1, int t2, int t3, int t4, int& rIndex, int& 
         //t3 2nd smallest
         if (t2 < t4) {
             //  order t1, t3, t2, t4
+            assert (t1 < t3);
+            assert (t3 < t2);
+            assert (t2< t4);
             cIndex = 1;
             rIndex = computeRIndex(t1, t3, t2, t4);
         }
         else {
             // order t1, t3, t4, t2
+            assert (t1 < t3);
+            assert (t3 < t4);
+            assert (t4 < t2);
             cIndex = 2;
             rIndex = computeRIndex(t1, t3, t4, t2);
         }
@@ -153,7 +160,7 @@ string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> >& counts, in
         superNodes.push_back(new SuperNode(i + 1, i < numTaxa));
     }
 
-    vector<int> activeNodes;
+    vector<int> activeNodes; // keeps track of list of super nodes active in current iteration
     for (int i = 0; i < numTaxa; i++) {
         activeNodes.push_back(i + 1);
     }
@@ -164,13 +171,14 @@ string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> >& counts, in
     for (int j = 1; j <= numTaxa; j++) {
         for (int i = 1; i < j; i++) {
             confidence[i - 1][j -1] = computeConfidence(i, j, activeNodes, counts);
-            size[i - 1][j - 1] = computeCardinality(i, j, activeNodes);
+            size[i - 1][j - 1] = nCr[numTaxa - 2][1]; //initial cardinality is always numTaxa-2 choose 2, no need to do summation
             support[i -1][j - 1] = confidence[i - 1][j -1]/size[i - 1][j - 1];
         }
     }
 
     int currentNode = numTaxa;
     while (true) {
+        // find nodes that have maximum support, call them maxI, maxJ
         int maxI = activeNodes[0], maxJ = activeNodes[1];
         double maxSupport = support[maxI - 1][maxJ - 1];
         for (int j = 0; j < activeNodes.size(); j++) {
@@ -205,7 +213,7 @@ string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> >& counts, in
                 int node2 = activeNodes[j];
                 for (int k = j + 1; k < activeNodes.size(); k++) {
                     int node3 = activeNodes[k];
-                    //find weights of 3 different resolutions for node1, node2, node3 and currentNode
+                    //find weights of 3 different resolutions for node1, node2, node3 and newly created node(currentNode)
                     int rInd1, cInd1, rInd2, cInd2;
                     int rIndResult, cIndResult;
 
@@ -228,12 +236,12 @@ string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> >& counts, in
 
         }
 
-        //compute confidence, support for newnode and every other active node
+        //compute confidence, support for currentNode and every other active node
         for (int i = 0; i < activeNodes.size(); i++) {
             int node1 = activeNodes[i];
-            confidence[node1 - 1][currentNode - 1] = computeConfidence(node1, currentNode, activeNodes, counts);
-            size[node1 - 1][currentNode - 1] = computeCardinality(node1, currentNode, activeNodes);
-            support[node1 - 1][currentNode - 1] = confidence[node1 - 1][currentNode - 1] /size[node1 - 1][currentNode - 1];
+            confidence[node1 - 1][currentNode - 1] = computeNewConfidence(maxI, maxJ, node1,activeNodes,counts,confidence);
+            size[node1 - 1][currentNode - 1] = computeNewCardinality(maxI, maxJ, node1, numTaxa, activeNodes, size);
+            support[node1 - 1][currentNode - 1] = confidence[node1 - 1][currentNode - 1] / size[node1 - 1][currentNode - 1];
         }
 
         // modify confidence, support of active node pairs from previous iteration
@@ -293,18 +301,18 @@ string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> >& counts, in
         }
     }
 
-    //TODO: choose lowest taxon as outgroup
     stringstream top;
     top << "(";
     node1->print(top);
-    top << ",(";
+    top << ",";
     node2->print(top);
     top << ",";
     node3->print(top);
-    top << "));";
+    top << ");";
     return top.str();
 }
 
+//compute initial confidence, can also be used for computing confidence in later steps but inefficient,  use computeNewConfidence instead
 double TreeBuilder::computeConfidence(int m, int n, vector<int>& activeNodes, vector<vector<double> >& counts) {
     double confidence = 0.0;
     for (int i = 0; i < activeNodes.size(); i++) {
@@ -325,24 +333,64 @@ double TreeBuilder::computeConfidence(int m, int n, vector<int>& activeNodes, ve
     return confidence;
 }
 
-int TreeBuilder::computeCardinality(int m, int n, vector<int>& activeNodes) {
-    int cardinality = 0;
-    for (int i = 0; i < activeNodes.size(); i++) {
-        int node1 = activeNodes[i];
-        if (node1 == m || node1 == n)
-            continue;
-        for (int j = i + 1; j < activeNodes.size(); j++) {
-            int node2 = activeNodes[j];
-            if (node2 == m || node2 == n)
-                continue;
-
-            cardinality += superNodes[node1 - 1]->getNumNodes() * superNodes[node2 - 1]->getNumNodes();
-        }
+// compute confidence of pairs that contain new super node, formula(D!=K,B): C(K, B) = C(I,B) + C(J,B) - Sum(counts[I][B][J][D] + counts[J][B][I][D])
+double TreeBuilder::computeNewConfidence(int i, int j, int b, vector<int>& activeNodes, vector<vector<double> >& counts, vector<vector<double> >& confidence) {
+    double conf = 0.0;
+    if (i < b) {
+        conf += confidence[i - 1][b - 1];
+    }
+    else {
+        conf += confidence[b - 1][i - 1];
     }
 
-    cardinality *= superNodes[m - 1]->getNumNodes() * superNodes[n - 1]->getNumNodes();
-    return cardinality;
+    if (j < b) {
+        conf += confidence[j - 1][b - 1];
+    }
+    else {
+        conf += confidence[b - 1][j - 1];
+    }
+
+    for (int ii = 0; ii < activeNodes.size(); ii++) {
+        int d = activeNodes[ii];
+        if (d == b)
+            continue;
+
+        int rind, cind;
+        getQuartetRowColumnIndex(i, b, j, d, rind, cind);
+        conf += counts[rind][cind];
+
+        getQuartetRowColumnIndex(j, b, i, d, rind, cind);
+        conf += counts[rind][cind];
+    }
+
+    return conf;
 }
+
+// compute cardinality of pairs that contain new super node, formula T(K, B) = T(I,B) + T(J,B) - 2 * size(I) * size(J) * size(B) * (ntaxa - size(B) - size(K))
+double TreeBuilder::computeNewCardinality(int maxI, int maxJ, int node1, int numTaxa, vector<int>& activeNodes, vector<vector<double> >& size) {
+    double sz = 0.0;
+    if (maxI < node1) {
+        sz += size[maxI - 1][node1 - 1];
+    }
+    else {
+        sz += size[node1 - 1][maxI - 1];
+    }
+
+    if (maxJ < node1) {
+        sz += size[maxJ - 1][node1 - 1];
+    }
+    else {
+        sz += size[node1 - 1][maxJ - 1];
+    }
+
+    int sizeI = superNodes[maxI - 1]->getNumNodes();
+    int sizeJ = superNodes[maxJ - 1]->getNumNodes();
+    int sizeB = superNodes[node1 - 1]->getNumNodes();
+    int sizeK = sizeI + sizeJ;
+    sz -= 2 * sizeI * sizeJ * sizeB * (numTaxa - sizeB - sizeK);
+    return sz;
+}
+
 
 Node* Node::getNeighbor(int i) const { return edges[i]->getOtherNode(this); }
 
