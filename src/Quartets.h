@@ -47,6 +47,7 @@ public:
         }
         return f;
     }
+
 private:
     vector<int> tset;
 };
@@ -69,7 +70,7 @@ public:
   Edge* getEdge(int n) const { return edges[n]; }
   bool isLeaf() const { return leaf; }
   void setEdge(int n,Edge *e) { edges[n]=e; }
-  void print(ostream&) const;
+  void print(ostream&, ostream&, const Node *, const Node *, int) const;
   Node* getNeighbor(int) const;
   void mergeTaxa(int index, Node *n, int nIndex) {
       t[index]->merge(n->t[nIndex]);
@@ -77,6 +78,7 @@ public:
   void addTaxa(int index, int taxon) {
       t[index]->add(taxon);
   }
+
   vector<int>& getTaxa(int index) {
       return t[index]->getTSet();
   }
@@ -84,6 +86,8 @@ public:
   TaxonSet*& getTset(int index) {
       return t[index];
   }
+  void print(ostream& f) const;
+
 private:
   int number;
   bool leaf;
@@ -93,15 +97,18 @@ private:
 
 class Edge {
 public:
-  Edge(int n) : number(n) {}
+  Edge(int n) : number(n) {weight  = 0.0;}
   int getNumber() const { return number; }
   Node* getNode(int i) { return nodes[i]; }
   Node* getOtherNode(const Node *n) const { return (n==nodes[0] ? nodes[1] : nodes[0]); }
   void setNode(int i,Node *n) { nodes[i] = n; }
   void print(ostream&,int) const;
+  void addWeight(double wt) { weight += wt; }
+  double getWeight() { return weight; }
   ~Edge() {}
 private:
   int number;
+  double weight;
   Node* nodes[2];
 };
 
@@ -128,14 +135,25 @@ public:
     for(int i=0;i<numEdges;i++)
       delete edges[i];
   }
+  void print(ostream& f) const
+  {
+      f << top << endl;
+      f << "numTaxa = " << numTaxa << ", numNodes = " << numNodes << ", numEdges = " << numEdges << endl;
+      f << "Nodes:" << endl;
+      for(int i=0;i<numNodes;i++)
+          nodes[i]->print(f);
+      f << "Edges:" << endl;
+      for(int i=0;i<numEdges;i++)
+          edges[i]->print(f,numTaxa);
+  }
   void connect(string);
   Node* connectInt(istream&,int&,int&,int&,int&);
   Node* connectThreeNodes(Node*,Node*,Node*,int&,int&);
   void connectTwoNodes(Node*,Node*,int&,int&);
-  void print(ostream&) const;
+  void modifyOutgroup(int,string&,string&) const;
   void setAllTaxa();
-//  void getQuartets(vector<vector<int> >& quartets);
   void getQuartets(vector<int>& rInd, vector<int>& cInd);
+  int getQuartets(vector<int>& rInd, vector<int>& cInd, Node *n1, Node *n2);
   int getNumTaxa() const { return numTaxa; }
   int getNumNodes() const { return numNodes; }
   int getNumEdges() const { return numEdges; }
@@ -159,7 +177,6 @@ public:
         node =  new Node(n, lf);
         if (lf) {
             numLeafs = 1;
-            lowestTaxon = n;
         }
         else {
             numLeafs = 0;
@@ -168,24 +185,33 @@ public:
 
     void add(SuperNode *lc, SuperNode *rc) {
         numLeafs = lc->numLeafs + rc->numLeafs;
-        if (lc->lowestTaxon < rc->lowestTaxon) {
-            left = lc;
-            right = rc;
-            lowestTaxon = lc->lowestTaxon;
-        }
-        else {
-            left = rc;
-            right = lc;
-            lowestTaxon = rc->lowestTaxon;
-        }
+        left = lc;
+        right = rc;
+
+    }
+
+    void setLeft(SuperNode *l) {
+        left = l;
+    }
+
+    void setRight(SuperNode *r) {
+        right = r;
+    }
+
+    SuperNode *getLeft() {
+        return left;
+    }
+
+    SuperNode *getRight() {
+        return right;
+    }
+
+    int getNumber() {
+        return node->getNumber();
     }
 
     int getNumNodes() {
         return numLeafs;
-    }
-
-    int getLowestTaxon() {
-        return lowestTaxon;
     }
 
     void print(ostream& f) {
@@ -197,8 +223,6 @@ public:
         f << "(";
         if (left != NULL) {
             left->print(f);
-        }
-        if (right != NULL) {
             f << ",";
             right->print(f);
         }
@@ -207,7 +231,6 @@ public:
 private:
     Node* node;
     int numLeafs;
-    int lowestTaxon;
     // each supernode can refer to two other supernodes at max except for root
     SuperNode *left;
     SuperNode *right;
@@ -215,9 +238,9 @@ private:
 
 class TreeBuilder {
 public:
-    string getTree(Table* newTable, int numTaxa);
+    void getTree(Table* newTable, int numTaxa, string& top, string& topWithWts);
 private:
-    string getTreeFromQuartetCounts(vector<vector<double> >& counts, int numTaxa);
+    string getTreeFromQuartetCounts(vector<vector<double> > counts, int numTaxa);
     double computeConfidence(int m, int n, vector<int>& activeNodes, vector<vector<double> >& counts);
     double computeNewConfidence(int i, int j, int b, vector<int>& activeNodes, vector<vector<double> >& counts, vector<vector<double> >& confidence);
     double computeNewCardinality(int maxI, int maxJ, int node1, int numTaxa, vector<int>& activeNodes, vector<vector<double> >& size);

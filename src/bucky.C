@@ -1353,7 +1353,7 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
 		 int numGenes,RunParameters& rp,ModelParameters& mp,Table *newTable,
 		 vector<vector<int> >& clusterCount, vector<TaxonSet>& splits,  vector<vector<vector<int> > >& splitsGeneMatrix,
 		 vector<vector<int> >& pairCounts,   vector<Gene*>& genes, vector<double>& alphas,
-		 vector<vector<int> >& mcmcmcAccepts,vector<vector<int> >& mcmcmcProposals, vector<string>& translateTable, string quartetTree)
+		 vector<vector<int> >& mcmcmcAccepts,vector<vector<int> >& mcmcmcProposals, vector<string>& translateTable, string quartetTree, string quartetTreeWithWts)
 {
   // .joint
   if(rp.getCreateJointFile()) {
@@ -1596,11 +1596,13 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
   }
 
   concordanceStr << "Tree from Quartet Joining:" << endl;
-  concordanceStr << quartetTree << endl;
+  concordanceStr << quartetTree << endl << endl;
   ConcordanceTree z(tset,numGenes);
   concordanceStr << "Primary Concordance Tree Topology:" << endl;
   z.printTopology(concordanceStr);
 
+  concordanceStr<< "Tree from Quartet Joining with weights:" << endl;
+  concordanceStr << quartetTreeWithWts << endl << endl;
   concordanceStr << "Primary Concordance Tree with Sample Concordance Factors:" << endl;
   z.print(concordanceStr, numGenes);
 
@@ -2241,11 +2243,12 @@ int main(int argc, char *argv[])
     }
 
   quartet::TreeBuilder tb;
-  string quartetTree = tb.getTree(newTable, numTaxa);
+  string quartetTree, quartetTreeWithWts;
+  tb.getTree(newTable, numTaxa, quartetTree, quartetTreeWithWts);
 
   writeOutput(fout,fileNames,max,numTrees,numTaxa,topologies,numGenes,rp,mp,
 	      newTable,clusterCount,splits,splitsGeneMatrix,
-	      pairCounts,genes,alphas,mcmcmcAccepts,mcmcmcProposals, translateTable, quartetTree);
+	      pairCounts,genes,alphas,mcmcmcAccepts,mcmcmcProposals, translateTable, quartetTree, quartetTreeWithWts);
 
   for(int i=0;i<numGenes;i++)
     delete genes[i];

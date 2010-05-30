@@ -96,7 +96,7 @@ void getQuartetRowColumnIndex(int t1, int t2, int t3, int t4, int& rIndex, int& 
     }
 }
 
-string TreeBuilder::getTree(Table* newTable, int numTaxa) {
+void TreeBuilder::getTree(Table* newTable, int numTaxa, string& top, string& topWithWts) {
     vector<string> topologies = newTable->getTopologies();
     precomputeNcR(numTaxa);
     int numNodes = numTaxa + numTaxa - 3;
@@ -117,6 +117,60 @@ string TreeBuilder::getTree(Table* newTable, int numTaxa) {
         }
     }
 
+    for (int i = 0; i < counts.size(); i++) {
+        double total = counts[i][0] + counts[i][1] + counts[i][2];
+        if (total != 0.0) {
+            counts[i][0] /= total;
+            counts[i][1] /= total;
+            counts[i][2] /= total;
+        }
+    }
+    top = getTreeFromQuartetCounts(counts, numTaxa);
+    Tree t(numTaxa, top);
+    for (int i = 0; i < numTaxa; i++) {
+        t.getEdge(i)->addWeight(1.0);//set weight 1.0 for all leaf edges
+    }
+
+    //compute weights for internal edges using formula W(AB|CD)/|A||B||C||D|
+    for (int i = numTaxa; i < t.getNumEdges(); i++) {
+        Edge *e = t.getEdge(i);
+        Node *n1 = e->getNode(0);
+        Node *n2 = e->getNode(1);
+        vector<int> rInd, cInd;
+        int abcd = t.getQuartets(rInd, cInd, n1, n2); // returns |A||B||C||D|
+        double wt = 0.0;
+        for (int i = 0; i < rInd.size(); i++) {
+            wt += counts[rInd[i]][cInd[i]];
+        }
+
+        wt /= (double) abcd;
+        e->addWeight(wt);
+    }
+
+    t.modifyOutgroup(numTaxa, top, topWithWts);//choose last taxon as outgroup and print topologies to top, topWithWts.
+}
+
+// returns smallest number in range [1, numTaxa] that is not present in t1, t2
+int getComplement(vector<int>& t1, vector<int>& t2, int numTaxa)
+{
+    vector<int>::iterator it1 = t1.begin();
+    vector<int>::iterator it2 = t2.begin();
+    for (int i = 1; i <= numTaxa; i++) {
+        if (i == *it1) {
+            it1++;
+            continue;
+        }
+
+        if (i == *it2) {
+            it2++;
+            continue;
+        }
+
+        return i;
+    }
+}
+
+string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> > counts, int numTaxa) {
     // normalize counts.
     int numOfCurrentQuartets = nCr[numTaxa - 1][2] + nCr[numTaxa - 1][3]; //C(numTaxa,4)  = C(numTaxa - 1, 3) + C(numTaxa - 1, 4)
     // current version: resolution with biggest count gets probability 1, other two get 0
@@ -151,10 +205,6 @@ string TreeBuilder::getTree(Table* newTable, int numTaxa) {
         }
     }
 
-    return getTreeFromQuartetCounts(counts, numTaxa);
-}
-
-string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> >& counts, int numTaxa) {
     int numNodes = numTaxa + numTaxa - 3;
     for (int i = 0; i < numNodes; i++) {
         superNodes.push_back(new SuperNode(i + 1, i < numTaxa));
@@ -263,52 +313,18 @@ string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> >& counts, in
         activeNodes.push_back(currentNode);
     }
 
-    SuperNode *node1, *node2, *node3;
-    if (superNodes[activeNodes[2] - 1]->getLowestTaxon() < superNodes[activeNodes[1] - 1]->getLowestTaxon()) {
-        if (superNodes[activeNodes[2] - 1]->getLowestTaxon() < superNodes[activeNodes[0] - 1]->getLowestTaxon()) {
-            node1 = superNodes[activeNodes[2] - 1];
-            if (superNodes[activeNodes[0] - 1]->getLowestTaxon() < superNodes[activeNodes[1] - 1]->getLowestTaxon()) {
-                node2 =superNodes[activeNodes[0] - 1];
-                node3 = superNodes[activeNodes[1] - 1];
-            }
-            else {
-                node2 =superNodes[activeNodes[1] - 1];
-                node3 = superNodes[activeNodes[0] - 1];
-            }
-        }
-        else {
-            node1 = superNodes[activeNodes[0] - 1];
-            node2 =superNodes[activeNodes[2] - 1];
-            node3 = superNodes[activeNodes[1] - 1];
-        }
-    }
-    else {
-        if (superNodes[activeNodes[1] - 1]->getLowestTaxon() < superNodes[activeNodes[0] - 1]->getLowestTaxon()) {
-            node1 = superNodes[activeNodes[1] - 1];
-            if (superNodes[activeNodes[2] - 1]->getLowestTaxon() < superNodes[activeNodes[0] - 1]->getLowestTaxon()) {
-                node2 =superNodes[activeNodes[2] - 1];
-                node3 = superNodes[activeNodes[0] - 1];
-            }
-            else {
-                node2 =superNodes[activeNodes[0] - 1];
-                node3 = superNodes[activeNodes[2] - 1];
-            }
-        }
-        else {
-            node1 = superNodes[activeNodes[0] - 1];
-            node2 = superNodes[activeNodes[1] - 1];
-            node3 = superNodes[activeNodes[2] - 1];
-        }
-    }
+    SuperNode *node1 = superNodes[activeNodes[0] - 1];
+    SuperNode *node2 = superNodes[activeNodes[1] - 1];
+    SuperNode *node3 = superNodes[activeNodes[2] - 1];;
 
     stringstream top;
     top << "(";
     node1->print(top);
-    top << ",";
+    top << ",(";
     node2->print(top);
     top << ",";
     node3->print(top);
-    top << ");";
+    top << "));";
     return top.str();
 }
 
@@ -406,23 +422,160 @@ void Node::print(ostream& f) const
     f << endl;
 }
 
+void Node::print(ostream& f, ostream& topStr, const Node *caller, const Node *root, int numTaxa) const
+{
+    if (leaf) {
+        f << t[0]->getTSet()[0];
+        topStr << t[0]->getTSet()[0];
+        return;
+    }
+
+    int rank[2];
+    Node *n[2];
+    double weight[2];
+
+    // print is called from one of the three neighbors, find other two neighbors
+    for (int i = 2, pos = 1; pos >= 0; i--) {
+        Node *temp = getNeighbor(i);
+        if (temp != caller) {
+            n[pos] = temp;
+            weight[pos] =edges[i]->getWeight();
+            if (i != 0 || root == this) {
+                rank[pos--] = t[i]->getTSet()[0];
+            }
+            else {
+                rank[pos--] = getComplement(t[1]->getTSet(), t[2]->getTSet(), numTaxa);
+            }
+        }
+    }
+
+    // check which neighbor has lower taxa and print it first
+    f << "(";
+    topStr << "(";
+    if (rank[0] < rank[1]) {
+        n[0]->print(f, topStr, this, root, numTaxa);
+        f << ":" << fixed << weight[0] << ",";
+        topStr << ",";
+        n[1]->print(f, topStr, this, root, numTaxa);
+        f << ":" << fixed << weight[1];
+    }
+    else {
+        n[1]->print(f, topStr, this, root, numTaxa);
+        f << ":" << fixed << weight[1] << ",";
+        topStr << ",";
+        n[0]->print(f, topStr, this, root, numTaxa);
+        f << ":" << fixed << weight[0];
+
+    }
+    f << ")";
+    topStr << ")";
+
+}
+
 void Edge::print(ostream& f,int numTaxa) const
 {
-    f << setw(3) << number << ":";
+    f << setw(3) << number << "(" << weight << ")" << ":";
     f << " n[" << nodes[0]->getNumber() << "] <-> " << "n[" << nodes[1]->getNumber() << "], split = ";
     f << endl;
 }
 
-void Tree::print(ostream& f) const
+// reroots the tree to parent node of node representing taxa
+// Note: does not change the tree structure, just returns a 'new' topology string
+void Tree::modifyOutgroup(int taxon, string& top, string& topWithWts) const
 {
-    f << top << endl;
-    f << "numTaxa = " << numTaxa << ", numNodes = " << numNodes << ", numEdges = " << numEdges << endl;
-    f << "Nodes:" << endl;
-    for(int i=0;i<numNodes;i++)
-        nodes[i]->print(f);
-    f << "Edges:" << endl;
-    for(int i=0;i<numEdges;i++)
-        edges[i]->print(f,numTaxa);
+    stringstream f;// stream to print topology with weights
+    f.precision(3);
+    stringstream topStr;// stream to print topology without weights
+    int index = 0;
+    //identify index of leaf node representing this taxa.
+    for (;index < numTaxa; index++) {
+        if (nodes[index]->getTset(0)->getTSet()[0] == taxon) {
+            break;
+        }
+    }
+
+    Node *newRoot = nodes[index]->getNeighbor(0);
+    Node *nbrs[3];
+    int tset[3];
+    for (int i = 0; i < 3; i++) {
+        nbrs[i] = newRoot->getNeighbor(i);
+        tset[i] = newRoot->getTset(i)->getTSet()[0];
+    }
+
+    if (newRoot != root) {
+        // since new root is not actually a root, taxonsets on 3 edges will be {a}U{b}, {a}, {b}
+        // change the first set to: compliment of {a}U{b}
+        tset[0] = getComplement(newRoot->getTset(1)->getTSet(), newRoot->getTset(2)->getTSet(), numTaxa);
+    }
+
+    f << "(";
+    topStr << "(";
+    if (tset[0] < tset[1]) {
+        if (tset[0] < tset[2]) {
+            nbrs[0]->print(f, topStr, newRoot, root, numTaxa);
+            f << ":" << fixed << newRoot->getEdge(0)->getWeight() << ",";
+            topStr << ",";
+            if (tset[1] < tset[2]) {
+                nbrs[1]->print(f, topStr, newRoot, root, numTaxa);
+                f << ":" << fixed << newRoot->getEdge(1)->getWeight() << ",";
+                topStr << ",";
+                nbrs[2]->print(f, topStr, newRoot, root, numTaxa);
+                f << ":" << fixed << newRoot->getEdge(2)->getWeight();
+            }
+            else {
+                nbrs[2]->print(f, topStr, newRoot, root, numTaxa);
+                f << ":" << fixed << newRoot->getEdge(2)->getWeight() << ",";
+                topStr << ",";
+                nbrs[1]->print(f, topStr, newRoot, root, numTaxa);
+                f << ":" << fixed << newRoot->getEdge(1)->getWeight();
+            }
+        }
+        else {
+            nbrs[2]->print(f, topStr, newRoot, root, numTaxa);
+            f << ":" << fixed << newRoot->getEdge(2)->getWeight() << ",";
+            topStr << ",";
+            nbrs[0]->print(f, topStr, newRoot, root, numTaxa);
+            f << ":" << fixed << newRoot->getEdge(0)->getWeight() << ",";
+            topStr << ",";
+            nbrs[1]->print(f, topStr, newRoot, root, numTaxa);
+            f << ":" << fixed << newRoot->getEdge(1)->getWeight();
+        }
+    }
+    else if (tset[1] < tset[2]) {
+        nbrs[1]->print(f, topStr, newRoot, root, numTaxa);
+        f << ":" << fixed << newRoot->getEdge(1)->getWeight() << ",";
+        topStr << ",";
+        if (tset[0] < tset[2]) {
+            nbrs[0]->print(f, topStr, newRoot, root, numTaxa);
+            f << ":" << fixed << newRoot->getEdge(0)->getWeight() << ",";
+            topStr << ",";
+            nbrs[2]->print(f, topStr, newRoot, root, numTaxa);
+            f << ":" << fixed << newRoot->getEdge(2)->getWeight();
+        }
+        else {
+            nbrs[2]->print(f, topStr, newRoot, root, numTaxa);
+            f << ":" << fixed << newRoot->getEdge(2)->getWeight() << ",";
+            topStr << ",";
+            nbrs[0]->print(f, topStr, newRoot, root, numTaxa);
+            f << ":" << fixed << newRoot->getEdge(0)->getWeight();
+        }
+    }
+    else {
+        nbrs[2]->print(f, topStr, newRoot, root, numTaxa);
+        f << ":" << fixed << newRoot->getEdge(2)->getWeight() << ",";
+        topStr << ",";
+        nbrs[1]->print(f, topStr, newRoot, root, numTaxa);
+        f << ":" << fixed << newRoot->getEdge(1)->getWeight() << ",";
+        topStr << ",";
+        nbrs[0]->print(f, topStr, newRoot, root, numTaxa);
+        f << ":" << fixed << newRoot->getEdge(0)->getWeight();
+    }
+
+    f << ");";
+    topStr << ");";
+
+    topWithWts = f.str();
+    top = topStr.str();
 }
 
 void Tree::connect(string top)
@@ -564,6 +717,7 @@ void Tree::connectTwoNodes(Node* node1, Node* node2, int& currentLeafEdge, int& 
     edge->setNode(1,node2);
 }
 
+// returns size of set {t1 intersect t2}
 int Tree::intersect(vector<int>& t1, vector<int>& t2) {
     vector<int> v(t1.size()> t2.size() ? t2.size() : t1.size());
 //    sort(t1.begin(), t1.end());
@@ -588,6 +742,7 @@ int Tree::intersect(vector<int>& t1, vector<int>& t2) {
     return int(it - v.begin());
 }
 
+// returns tsets of size 4. Taxonsets on path from n1 to n2 are skipped
 void Tree::getTsets(vector<vector <int> >& tsets, Node *n1, Node *n2) {
     int i, j;
     int matchI = 0, matchJ = 0;
@@ -645,11 +800,21 @@ void Tree::getTsets(vector<vector <int> >& tsets, Node *n1, Node *n2) {
 }
 
 void Tree::getQuartets(vector<int>& rInd, vector<int>& cInd) {
-    vector<vector<int> > quartets;
     for (int i = numTaxa; i < numNodes; i++) {
         Node *n1 = nodes[i];
         for (int j = i + 1; j < numNodes; j++) {
             Node *n2 = nodes[j];
+            getQuartets(rInd, cInd, n1 , n2);
+        }
+    }
+}
+
+int Tree::getQuartets(vector<int>& rInd, vector<int>& cInd, Node *n1, Node *n2) {
+    vector<vector<int> > quartets;
+//    for (int i = numTaxa; i < numNodes; i++) {
+
+//        for (int j = i + 1; j < numNodes; j++) {
+
             vector<vector<int> > tsets;
             getTsets(tsets, n1, n2);
             assert(tsets.size() == 4);
@@ -671,8 +836,10 @@ void Tree::getQuartets(vector<int>& rInd, vector<int>& cInd) {
                     }
                 }
             }
-        }
-    }
+//        }
+//    }
+
+            return tsets[0].size() * tsets[1].size() * tsets[2].size() * tsets[3].size();
 }
 
 /*int main(int argc, char *argv[]) {
