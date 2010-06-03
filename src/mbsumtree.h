@@ -36,7 +36,7 @@ private:
 
 class Node {
 public:
-  Node() {}
+  Node() { number = -1; }
   ~Node() { edges.clear(); }
   Node(int n,bool l) : number(n), leaf(l) {}
   int getNumber() const { return number; }
@@ -125,7 +125,7 @@ public:
   void printTop(ostream&);
   void reorder(Node*);
   bool readSubtree(istringstream&,Node*,int&,int);
-  void setNumbers();
+  void setNumbers(Node*);
   void setMinTaxa(Node*);
 private:
   int numTaxa;
