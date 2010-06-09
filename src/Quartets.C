@@ -128,7 +128,7 @@ void TreeBuilder::getTree(Table* newTable, int numTaxa, string& top, string& top
     top = getTreeFromQuartetCounts(counts, numTaxa);
     Tree t(numTaxa, top);
     for (int i = 0; i < numTaxa; i++) {
-        t.getEdge(i)->addWeight(1.0);//set weight 1.0 for all leaf edges
+        t.getEdge(i)->addWeight(10.0);//set prob 1.0, branch length in #coalescent units as 10 for all leaf edges
     }
 
     //compute weights for internal edges using formula W(AB|CD)/|A||B||C||D|
@@ -144,6 +144,14 @@ void TreeBuilder::getTree(Table* newTable, int numTaxa, string& top, string& top
         }
 
         wt /= (double) abcd;
+        //convert prob to # of coalescent units.
+        if (wt > 0.99997)
+            wt = 10.0;
+        else if (wt <= .33333)
+            wt = 0.0;
+        else
+            wt = -log10(3.0/2.0 * (1-wt));
+
         e->addWeight(wt);
     }
 

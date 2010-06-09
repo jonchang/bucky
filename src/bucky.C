@@ -1595,13 +1595,13 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
     taxaNum++;
   }
 
-  concordanceStr << "Tree from Quartet Joining:" << endl;
+  concordanceStr << "Population Tree:" << endl;
   concordanceStr << quartetTree << endl << endl;
   ConcordanceTree z(tset,numGenes);
   concordanceStr << "Primary Concordance Tree Topology:" << endl;
   z.printTopology(concordanceStr);
 
-  concordanceStr<< "Tree from Quartet Joining with weights:" << endl;
+  concordanceStr<< "Population Tree, With Branch Lengths In Estimated Coalescent Units:" << endl;
   concordanceStr << quartetTreeWithWts << endl << endl;
   concordanceStr << "Primary Concordance Tree with Sample Concordance Factors:" << endl;
   z.print(concordanceStr, numGenes);
