@@ -181,8 +181,8 @@ string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> > counts, int
 //            counts[i][1] = .333333;
 //            counts[i][2] = .333334;
 //        }
-        if (counts[i][0] > counts[i][1]) {
-            if (counts[i][0] > counts[i][2]) {
+        if (counts[i][0] >= counts[i][1]) {
+            if (counts[i][0] >= counts[i][2]) {
                 counts[i][0] = 1;
                 counts[i][1] = 0;
                 counts[i][2] = 0;
@@ -193,7 +193,7 @@ string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> > counts, int
                 counts[i][2] = 1;
             }
         }
-        else if (counts[i][1] > counts[i][2]) {
+        else if (counts[i][1] >= counts[i][2]) {
             counts[i][0] = 0;
             counts[i][1] = 1;
             counts[i][2] = 0;
@@ -373,10 +373,10 @@ double TreeBuilder::computeNewConfidence(int i, int j, int b, vector<int>& activ
 
         int rind, cind;
         getQuartetRowColumnIndex(i, b, j, d, rind, cind);
-        conf += counts[rind][cind];
+        conf -= counts[rind][cind];
 
         getQuartetRowColumnIndex(j, b, i, d, rind, cind);
-        conf += counts[rind][cind];
+        conf -= counts[rind][cind];
     }
 
     return conf;
