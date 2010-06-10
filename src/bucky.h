@@ -725,7 +725,8 @@ public:
     createSingleFile(false),
     numGenomewideGrid(1000),
     swCFcutoff(.05),
-    optSpace(false)
+    optSpace(false),
+    shouldPruneGene(false)
   {}
   double getAlphaMultiplier() { return alphaMultiplier; }
   void setAlphaMultiplier(double x) { alphaMultiplier = x; }
@@ -759,6 +760,8 @@ public:
   void   setSwCFcutoff(double x) { swCFcutoff = x; }
   string getPruneFile() { return pruneFile; }
   void setPruneFile(string pFile) { pruneFile = pFile; }
+  bool getPruneGene() { return shouldPruneGene; }
+  void setPruneGene(bool pg) { shouldPruneGene = pg; }
   bool shouldOptSpace() { return optSpace;}
   void setOptSpace(bool o) { optSpace = o; }
 private:
@@ -770,6 +773,7 @@ private:
   bool createJointFile;
   bool createSingleFile;
   string pruneFile;
+  bool shouldPruneGene;
   bool optSpace; // set this if gene topology counts forms a sparse matrix. We do not store zeros in the 'table' in this case.
                  // default is false because this is not time-efficient.
 };
@@ -838,7 +842,7 @@ private:
   bool createSampleFile;
   bool createJointFile;
   bool createSingleFile;
-  bool optSpace; 
+  bool optSpace;
 };
 
 class GenomewideDistribution {

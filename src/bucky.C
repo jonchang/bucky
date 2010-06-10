@@ -172,11 +172,13 @@ bool getTaxa(string& file, set<string>& taxaInIFile, map<string, int>& translate
 
 }
 
-bool getTaxaSubset(vector<string> inputFiles, vector<bool>& hasTtable, map<string, int>& prunedTranslateMap, vector<string>& translateTable, string pruneFile, bool& changed) {
+void getTaxaSubset(vector<string>& inputFiles, map<string, int>& prunedTranslateMap, vector<string>& translateTable, string pruneFile, bool shouldPruneGene, bool& changed) {
+  vector<int> genesToIgnore;
   map<string, int> translateMap;
   set<string> taxaNames;
   size_t fileNum = 1;
   unsigned int maxTaxa = 0;
+  string firstFile = inputFiles[0];
   if (!pruneFile.empty()) {
     bool hasTable = getTaxa(pruneFile, taxaNames, translateMap);
     if (!hasTable) {
@@ -187,6 +189,7 @@ bool getTaxaSubset(vector<string> inputFiles, vector<bool>& hasTtable, map<strin
     }
     fileNum = 0;
     maxTaxa = taxaNames.size();
+    firstFile = pruneFile;
   }
   else {
     bool hasTable = getTaxa(inputFiles[0], taxaNames, translateMap);
@@ -198,6 +201,7 @@ bool getTaxaSubset(vector<string> inputFiles, vector<bool>& hasTtable, map<strin
       exit(0);
     }
   }
+
   for (;fileNum<inputFiles.size();fileNum++) {
     set<string> taxaInIFile;
     bool hasTable = getTaxa(inputFiles[fileNum], taxaInIFile, translateMap);
@@ -212,24 +216,30 @@ bool getTaxaSubset(vector<string> inputFiles, vector<bool>& hasTtable, map<strin
     set<string> output;
     int count = taxaInIFile.size();
     set_intersection(taxaNames.begin(), taxaNames.end(), taxaInIFile.begin(), taxaInIFile.end(), inserter(output, output.begin()));
-    taxaNames = output;
-    if (count != taxaInIFile.size() || count != taxaNames.size()) {
-        changed = true;
+    if (shouldPruneGene && (taxaNames.size() != output.size() || taxaNames.size() != taxaInIFile.size())) {
+        cerr << "Skipping gene " << inputFiles[fileNum] << " as translate table does not match with that of reference gene: " << firstFile << endl;
+        genesToIgnore.push_back(fileNum);
     }
-    if (taxaNames.size() < maxTaxa) {
-      cerr << "\nCannot prune to taxa subset specified in " << pruneFile << endl;
-      cerr << inputFiles[fileNum] << " does not have all taxa specified in the prune file" << endl;
-      for (set<string>::iterator itr = output.begin(); itr != output.end(); itr++) {
-        taxaNames.erase(*itr);
+    else {
+      if (count != taxaInIFile.size() || count != taxaNames.size()) {
+        changed = true;
       }
-      cerr << "Missing taxa for this locus:\n";
-      for (set<string>::iterator itr = taxaNames.begin(); itr != taxaNames.end(); itr++) {
-        cerr << *itr << "\n";
+      if (output.size() < maxTaxa) {
+        cerr << "\nCannot prune to taxa subset specified in " << firstFile << endl;
+        cerr << inputFiles[fileNum] << " does not have all taxa specified in the prune file" << endl;
+        for (set<string>::iterator itr = output.begin(); itr != output.end(); itr++) {
+          taxaNames.erase(*itr);
+        }
+        cerr << "Missing taxa for this locus:\n";
+        for (set<string>::iterator itr = taxaNames.begin(); itr != taxaNames.end(); itr++) {
+          cerr << *itr << "\n";
+        }
+
+        exit(0);
       }
 
-      exit(0);
+      taxaNames = output;
     }
-    taxaNames = output;
   }
 
   // Give ids to all taxa left after intersection.
@@ -257,6 +267,11 @@ bool getTaxaSubset(vector<string> inputFiles, vector<bool>& hasTtable, map<strin
       translateTable[itr->second - 1] = unmappedTaxa[i];
       i++;
     }
+  }
+
+  // if pg option is specified, loci not having all taxa should be ignored, erase them from inputFiles
+  for (int i = genesToIgnore.size() - 1; i >= 0; i--) {
+      inputFiles.erase(inputFiles.begin() + genesToIgnore[i]);
   }
 }
 
@@ -286,8 +301,8 @@ void normalize(vector<double>& table) {
 // add read topologies to row i of the table
 // when new topologies are discovered, add a new column to the table
 
-bool readFile(string filename, int i, Table*& tgm, int &max,
-              vector<int>& taxid, map<string, int>& translateMap, bool hasTtable, bool changed)
+void readFile(string filename, int i, Table*& tgm, int &max,
+              vector<int>& taxid, map<string, int>& translateMap, bool changed)
 {
   vector<double> table;
   vector<string> topologies;
@@ -396,7 +411,6 @@ bool readFile(string filename, int i, Table*& tgm, int &max,
   for (titr = topologies.begin(), citr = table.begin(); titr != topologies.end(); titr++, citr++) {
     tgm->addGeneCount(*titr, i, *citr);
   }
-  return hasTtable;
 }
 
 double State::calculateLogPriorProb()
@@ -1111,10 +1125,14 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
       rp.setPruneFile(argv[++k]);
       k++;
     }
+    else if (flag =="-pg") {
+      rp.setPruneGene(true);
+      k++;
+    }
     else if (flag =="--genomewide-grid-size") {
-      // grid-size is 1000 by default. 
-      // fixit: Yujin observed obviously wrong genome-wide CF values when the number of genes exceeds the grid size. 
-      // fixit: need to check that a higher grid-size fixed the bug, then add checks at the beginning to automatically 
+      // grid-size is 1000 by default.
+      // fixit: Yujin observed obviously wrong genome-wide CF values when the number of genes exceeds the grid size.
+      // fixit: need to check that a higher grid-size fixed the bug, then add checks at the beginning to automatically
       // increase the grid size to at least 10 * the number of genes. Or do whatever to fix the bug.
       unsigned int ngrid;
       string num = argv[++k];
@@ -1158,13 +1176,12 @@ void readInputFileList(string inputListFileName, vector<string>& inputFiles) {
   }
 }
 
-bool readInputFiles(vector<string>& inputFiles,Table* &tgm, vector<string>& translateTable,
-                    int& max, ostream& fout, vector<vector<int> >& taxid, string prunefile)
+void readInputFiles(vector<string>& inputFiles,Table* &tgm, vector<string>& translateTable,
+                    int& max, ostream& fout, vector<vector<int> >& taxid, string prunefile, bool shouldPruneGene)
 {
   bool changed = false;
-  vector<bool> hasTtable(inputFiles.size());
   map<string, int> translateMap;
-  bool oneno = getTaxaSubset(inputFiles, hasTtable, translateMap, translateTable, prunefile, changed);
+  getTaxaSubset(inputFiles, translateMap, translateTable, prunefile, shouldPruneGene, changed);
   if (translateTable.size() < 4) {
     cerr << "Too few taxa (" << translateTable.size() << ") left after pruning process, Taxa common to all genes:" << endl;
     for (map<string,int>::iterator itr = translateMap.begin(); itr != translateMap.end(); itr++) {
@@ -1182,19 +1199,18 @@ bool readInputFiles(vector<string>& inputFiles,Table* &tgm, vector<string>& tran
       fout << "0   10   20   30   40   50   60   70   80   90   100" << endl;
       fout << "+----+----+----+----+----+----+----+----+----+----+" << endl;
   }
+  taxid.resize(inputFiles.size());
   for (size_t i=0;i<inputFiles.size();i++){
     if (part != 0 && i % part == 0) {
       cout << "*";
       fout << "*";
     }
-    readFile(inputFiles[i],i,tgm,max,taxid[i],translateMap, hasTtable[i], changed);
+    readFile(inputFiles[i],i,tgm,max,taxid[i],translateMap, changed);
   }
   if (part != 0) {
     cout << endl;
     fout << endl;
   }
-
-  return(oneno);
 }
 
 void Defaults::print(ostream& f) {
@@ -1847,7 +1863,7 @@ int main(int argc, char *argv[])
   int max=0;
   int numTaxa;
   vector<string> translateTable;
-  vector<vector<int> > taxid(numGenes);
+  vector<vector<int> > taxid;
 
   // Open outfile to save all window output
   cout << "Screen output written to file " << fileNames.getOutFile() << endl;
@@ -1871,7 +1887,8 @@ int main(int argc, char *argv[])
   cout << "Reading in summary files...." << endl;
   fout << "Reading in summary files...." << endl;
   Table *topToGeneMap = new TGM();
-  bool missingTtable = readInputFiles(inputFiles,topToGeneMap,translateTable,max,fout,taxid, rp.getPruneFile());
+  readInputFiles(inputFiles,topToGeneMap,translateTable,max,fout,taxid, rp.getPruneFile(), rp.getPruneGene());
+  numGenes = inputFiles.size();
   numTaxa = translateTable.size();
   cout << "....done." << endl;
 
