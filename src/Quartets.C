@@ -147,10 +147,10 @@ void TreeBuilder::getTree(Table* newTable, int numTaxa, string& top, string& top
         //convert prob to # of coalescent units.
         if (wt > 0.99997)
             wt = 10.0;
-        else if (wt <= .33333)
+        else if (wt <= .33334)
             wt = 0.0;
         else
-            wt = -log10(3.0/2.0 * (1-wt));
+            wt = -log(3.0/2.0 * (1-wt));
 
         e->addWeight(wt);
     }
