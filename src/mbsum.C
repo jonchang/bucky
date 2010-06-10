@@ -38,7 +38,7 @@
 //
 // Usage:    mbsum [--help || -h] [<--skip || -n> number-of-skipped-trees] [<--out || -o> output-file] [--version] [input filename(s)]
 
-#define VERSION "1.3.2"
+#define VERSION "1.3.3"
 
 #include <iostream>
 #include <iomanip>
