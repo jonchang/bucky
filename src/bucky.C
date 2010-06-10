@@ -689,7 +689,6 @@ TaxonSet Node::setAllTaxa(Node* parent,TaxonSet all) {
 }
 
 void Tree::setAllTaxa() {
-  Node* root = nodes[0]->getNeighbor(0);
   for(int i=0;i<3;i++)
     root->setTaxa(i,all - root->getNeighbor(i)->setAllTaxa(root,all));
 }
@@ -735,33 +734,49 @@ void Tree::print(ostream& f) const
     edges[i]->print(f,numTaxa);
 }
 
-void Tree::connect(string top)
-{
-  int currentInternalNode=numTaxa,currentLeafEdge=0,currentInternalEdge=numTaxa;
-  Node *node1,*node2;
-  int n;
+void Tree::construct(string& top) {
+    // top is unrooted tree topology of form (X, Y, Z) X, Y, Z can be treated as rooted subtree topologies.
+    istringstream topStr(top);
+    int currentInternalNode=numTaxa,currentLeafEdge=0,currentInternalEdge=numTaxa;
+    char ch;
+    topStr >> ch;
+    Node *n1 = connectInt(topStr, currentInternalNode, currentLeafEdge, currentInternalEdge);
+    topStr >> ch;
+    Node *n2 = connectInt(topStr, currentInternalNode, currentLeafEdge, currentInternalEdge);
+    topStr >> ch;
+    Node *n3 = connectInt(topStr, currentInternalNode, currentLeafEdge, currentInternalEdge);
+    root = nodes[currentInternalNode++];
 
-  istringstream topStr(top);
-  char ch = topStr.peek();
-  if(ch!='(') {
-    topStr >> n;
-  }
-  else {
-    topStr >> ch;
-    node1 = connectInt(topStr,currentInternalNode,currentLeafEdge,currentInternalEdge);
-    topStr >> ch;
-    if(ch!=',') {
-      cerr << "Error: Cannot parse topology string, expected ',', found " << ch << endl;
-     exit(1);
-    }
-    node2 = connectInt(topStr,currentInternalNode,currentLeafEdge,currentInternalEdge);
-    topStr >> ch;
-    if(ch!=')') {
-      cerr << "Error: Cannot parse topology string, expected ')', found " << ch << endl;
-      exit(1);
-    }
-    connectTwoNodes(node1,node2,currentLeafEdge,currentInternalEdge);
-  }
+    Edge *e1, *e2, *e3;
+    if (n1->isLeaf())
+        e1 = edges[currentLeafEdge++];
+    else
+        e1 = edges[currentInternalEdge++];
+
+    if (n2->isLeaf())
+        e2 = edges[currentLeafEdge++];
+    else
+        e2 = edges[currentInternalEdge++];
+
+    if (n3->isLeaf())
+        e3 = edges[currentLeafEdge++];
+    else
+        e3 = edges[currentInternalEdge++];
+
+    root->setEdge(0, e1);
+    root->setEdge(1, e2);
+    root->setEdge(2, e3);
+
+    n1->setEdge(0, e1);
+    n2->setEdge(0, e2);
+    n3->setEdge(0, e3);
+
+    e1->setNode(0, root);
+    e1->setNode(1, n1);
+    e2->setNode(0, root);
+    e2->setNode(1, n2);
+    e3->setNode(0, root);
+    e3->setNode(1, n3);
 }
 
 Node* Tree::connectInt(istream& topStr,int& currentInternalNode,int& currentLeafEdge,int& currentInternalEdge)
@@ -813,19 +828,6 @@ Node *Tree::connectThreeNodes(Node* node1,Node* node2,Node* node3,int& currentLe
   edge2->setNode(0,node2);
   edge2->setNode(1,node3);
   return node3;
-}
-
-void Tree::connectTwoNodes(Node* node1, Node* node2, int& currentLeafEdge, int& currentInternalEdge)
-{
-  Edge *edge;
-  if(node1->isLeaf() || node2->isLeaf())
-    edge = edges[currentLeafEdge++];
-  else
-    edge = edges[currentInternalEdge++];
-  node1->setEdge(0,edge);
-  node2->setEdge(0,edge);
-  edge->setNode(0,node1);
-  edge->setNode(1,node2);
 }
 
 void Tree::getSplits(SplitSet& s) {

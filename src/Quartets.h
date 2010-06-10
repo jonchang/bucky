@@ -127,7 +127,7 @@ public:
       nodes[i] = new Node(i,0);
     for(int i=0;i<numEdges;i++)
       edges[i] = new Edge(i);
-    connect(top);
+    construct(top);
   }
   ~Tree() {
     for(int i=0;i<numNodes;i++)
@@ -146,10 +146,9 @@ public:
       for(int i=0;i<numEdges;i++)
           edges[i]->print(f,numTaxa);
   }
-  void connect(string);
+  void construct(string&);
   Node* connectInt(istream&,int&,int&,int&,int&);
   Node* connectThreeNodes(Node*,Node*,Node*,int&,int&);
-  void connectTwoNodes(Node*,Node*,int&,int&);
   void modifyOutgroup(int,string&,string&) const;
   void setAllTaxa();
   void getQuartets(vector<int>& rInd, vector<int>& cInd);

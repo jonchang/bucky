@@ -374,26 +374,43 @@ void Tree::printTop(ostream& f) {
   f << "(";
   int degree = root->getNumEdges();
   if(degree==2) {
+    // convert a rooted tree to unrooted - required for bucky
+    // degree 2 is covnerted to degree 3 by merging root with one of its childs
+    Node* n1 = root->getEdge(0)->getOtherNode(root);
+    Node* n2 = root->getEdge(1)->getOtherNode(root);
+    int k = 0;
+    for (int i = 0; i < n1->getNumEdges(); i++) {
+      Node *other = n1->getEdge(i)->getOtherNode(n1);
+      if (other == root)
+        continue;
+      other->printTop(f, n1->getEdge(i));
+      k++;
+      f << ",";
+    }
+
+    if (k == 2) {
+        n2->printTop(f, root->getEdge(1));
+    }
+    else {
+      for (int i = 0; i < n2->getNumEdges(); i++) {
+        Node *other = n2->getEdge(i)->getOtherNode(n2);
+        if (other == root)
+          continue;
+        other->printTop(f, n2->getEdge(i));
+        if (k < 2) {
+            f << ",";
+        }
+        k++;
+      }
+    }
+  }
+  else { // degree is 3 or more
     for(int i=0;i<degree;i++) {
       Edge* e = root->getEdge(i);
       e->getOtherNode(root)->printTop(f,e);
       if(i < degree-1)
         f << ",";
     }
-  }
-  else { // degree is 3 or more
-    // combine first degree-1 subtrees (last taxon is outgroup)
-    // so as to root the tree --required for bucky
-    f << "(";
-    for(int i=0;i<degree - 1;i++) {
-      Edge* e = root->getEdge(i);
-      e->getOtherNode(root)->printTop(f,e);
-      if(i < degree-2)
-        f << ",";
-    }
-    f << "),";
-    Edge* last = root->getEdge(degree - 1);
-    last->getOtherNode(root)->printTop(f,last);
   }
   f << ");";
 }

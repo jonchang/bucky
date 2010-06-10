@@ -185,9 +185,9 @@ string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> > counts, int
     // TODO: if three counts are approximately equal, may need to split into 0.3333 each
     for (int i = 0; i < numOfCurrentQuartets; i++) {
 //        if (counts[i][0] == counts[i][1] && counts[i][1] == counts[i][2]) {
-//            counts[i][0] = .333333;
+//            counts[i][0] = .333334;
 //            counts[i][1] = .333333;
-//            counts[i][2] = .333334;
+//            counts[i][2] = .333333;
 //        }
         if (counts[i][0] >= counts[i][1]) {
             if (counts[i][0] >= counts[i][2]) {
@@ -328,11 +328,11 @@ string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> > counts, int
     stringstream top;
     top << "(";
     node1->print(top);
-    top << ",(";
+    top << ",";
     node2->print(top);
     top << ",";
     node3->print(top);
-    top << "));";
+    top << ");";
     return top.str();
 }
 
@@ -586,63 +586,52 @@ void Tree::modifyOutgroup(int taxon, string& top, string& topWithWts) const
     top = topStr.str();
 }
 
-void Tree::connect(string top)
-{
+void Tree::construct(string& top) {
     int currentLeafNode = 0, currentInternalNode=numTaxa,currentLeafEdge=0,currentInternalEdge=numTaxa;
-    Node *node1,*node2;
-    int n;
-
+    Node *n1,*n2,*n3;
+    char ch;
     istringstream topStr(top);
-    char ch = topStr.peek();
-    if(ch!='(') {
-        topStr >> n;
-    }
-    else {
-        topStr >> ch;
-        node1 = connectInt(topStr,currentLeafNode,currentInternalNode,currentLeafEdge,currentInternalEdge);
-        topStr >> ch;
-        if(ch!=',') {
-            cerr << "Error: Cannot parse topology string, expected ',', found " << ch << endl;
-            exit(1);
-        }
-        node2 = connectInt(topStr,currentLeafNode,currentInternalNode,currentLeafEdge,currentInternalEdge);
-        topStr >> ch;
-        if(ch!=')') {
-            cerr << "Error: Cannot parse topology string, expected ')', found " << ch << endl;
-            exit(1);
-        }
-        connectTwoNodes(node1,node2,currentLeafEdge,currentInternalEdge);
-    }
+    topStr >> ch;
+    n1 = connectInt(topStr, currentLeafNode, currentInternalNode, currentLeafEdge, currentInternalEdge);
+    topStr >> ch;
+    n2 = connectInt(topStr, currentLeafNode, currentInternalNode, currentLeafEdge, currentInternalEdge);
+    topStr >> ch;
+    n3 = connectInt(topStr, currentLeafNode, currentInternalNode, currentLeafEdge, currentInternalEdge);
+    root = nodes[currentInternalNode++];
+    Edge *e1, *e2, *e3;
+    if (n1->isLeaf())
+        e1 = edges[currentLeafEdge++];
+    else
+        e1 = edges[currentInternalEdge++];
 
-    for (int i = numTaxa; i < numNodes; i++) {
-        if (nodes[i]->getTaxa(0).size() == numTaxa) {
-            root = nodes[i];
-            break;
-        }
-        else if (nodes[i]->getTaxa(1).size() == numTaxa) {
-            root = nodes[i];
-            break;
-        }
-        else if (nodes[i]->getTaxa(2).size() == numTaxa) {
-            root = nodes[i];
-            break;
-        }
-    }
-    TaxonSet* t0 = root->getTset(0);
-    TaxonSet* t1 = root->getTset(1);
-    TaxonSet* t2 = root->getTset(2);
-    if (t0->getTSet().size() < t1->getTSet().size()) {
-        TaxonSet *temp = t0;
-        t0 = t1;
-        t1 = t0;
-    }
-    if (t0->getTSet().size() < t2->getTSet().size()) {
-        TaxonSet *temp = t0;
-        t0 = t2;
-        t2 = t0;
-    }
-    t0->remove(t1);
-    t0->remove(t2);
+    if (n2->isLeaf())
+        e2 = edges[currentLeafEdge++];
+    else
+        e2 = edges[currentInternalEdge++];
+
+    if (n3->isLeaf())
+        e3 = edges[currentLeafEdge++];
+    else
+        e3 = edges[currentInternalEdge++];
+
+    root->setEdge(0, e1);
+    root->setEdge(1, e2);
+    root->setEdge(2, e3);
+
+    n1->setEdge(0, e1);
+    n2->setEdge(0, e2);
+    n3->setEdge(0, e3);
+
+    e1->setNode(0, root);
+    e1->setNode(1, n1);
+    e2->setNode(0, root);
+    e2->setNode(1, n2);
+    e3->setNode(0, root);
+    e3->setNode(1, n3);
+
+    root->mergeTaxa(0, n1, 0);
+    root->mergeTaxa(1, n2, 0);
+    root->mergeTaxa(2, n3, 0);
 }
 
 Node* Tree::connectInt(istream& topStr,int& currentLeafNode,int& currentInternalNode,int& currentLeafEdge,int& currentInternalEdge)
@@ -702,27 +691,6 @@ Node *Tree::connectThreeNodes(Node* node1,Node* node2,Node* node3,int& currentLe
     node3->mergeTaxa(0, node1, 0);
     node3->mergeTaxa(0, node2, 0);
     return node3;
-}
-
-void Tree::connectTwoNodes(Node* node1, Node* node2, int& currentLeafEdge, int& currentInternalEdge)
-{
-    Edge *edge;
-    if(node1->isLeaf() || node2->isLeaf())
-        edge = edges[currentLeafEdge++];
-    else
-        edge = edges[currentInternalEdge++];
-
-    if (node1->isLeaf() && !node2->isLeaf()) {
-        node2->addTaxa(0, node1->getTaxa(0)[0]);
-    }
-    else {
-        node1->mergeTaxa(0, node2, 0);
-    }
-
-    node1->setEdge(0,edge);
-    node2->setEdge(0,edge);
-    edge->setNode(0,node1);
-    edge->setNode(1,node2);
 }
 
 // returns size of set {t1 intersect t2}
@@ -818,7 +786,6 @@ void Tree::getQuartets(vector<int>& rInd, vector<int>& cInd) {
 }
 
 int Tree::getQuartets(vector<int>& rInd, vector<int>& cInd, Node *n1, Node *n2) {
-    vector<vector<int> > quartets;
 //    for (int i = numTaxa; i < numNodes; i++) {
 
 //        for (int j = i + 1; j < numNodes; j++) {
@@ -827,19 +794,13 @@ int Tree::getQuartets(vector<int>& rInd, vector<int>& cInd, Node *n1, Node *n2) 
             getTsets(tsets, n1, n2);
             assert(tsets.size() == 4);
             for (int j1 = 0; j1 < tsets[0].size(); j1++) {
-                vector<int> quartet;
-                quartet.push_back(tsets[0][j1]);
                 for (int j2 = 0; j2 < tsets[1].size(); j2++) {
-                    quartet.push_back(tsets[1][j2]);
                     for (int j3 = 0; j3 < tsets[2].size(); j3++) {
-                        quartet.push_back(tsets[2][j3]);
                         for (int j4 = 0; j4 < tsets[3].size(); j4++) {
-                            quartet.push_back(tsets[3][j4]);
                             int rIndex, cIndex;
                             getQuartetRowColumnIndex(tsets[0][j1], tsets[1][j2], tsets[2][j3], tsets[3][j4], rIndex, cIndex);
                             rInd.push_back(rIndex);
                             cInd.push_back(cIndex);
-                            quartets.push_back(quartet);
                         }
                     }
                 }
