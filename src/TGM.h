@@ -14,7 +14,7 @@ private:
     int index;
 };
 
-bool cmpTreeWeights(TreeWeight x,TreeWeight y) {  double diff = x.getWeight() - y.getWeight(); if (diff < 0) diff = -diff; if (diff < .00000001) return x.getIndex() < y.getIndex(); return x.getWeight() > y.getWeight(); }
+bool cmpTreeWeights(TreeWeight x,TreeWeight y);
 
 class GeneCounts {
 public:
@@ -51,6 +51,8 @@ public:
     virtual double getCounts(string top, int gene) = 0;
 
     virtual const vector<GeneCounts> getCounts(string top) = 0;
+
+    virtual double getTotalCounts(int top) = 0;
 
     virtual void reorder() = 0;
 
@@ -172,6 +174,15 @@ public:
         return table[n][gene];
     }
 
+    virtual double getTotalCounts(int top) {
+        double total = 0;
+        for (int i = 0; i < table[top].size(); i++) {
+            total += table[top][i];
+        }
+
+        return total;
+    }
+
     virtual double getCounts(int topIndex, int gene) {
         return table[topIndex][gene];
     }
@@ -267,6 +278,15 @@ public:
         }
 
         return 0.0;
+    }
+
+    virtual double getTotalCounts(int top) {
+        double total = 0;
+        for (int i = 0; i < topGeneCounts[top].size(); i++) {
+            total += topGeneCounts[top][i].getCount();
+        }
+
+        return total;
     }
 
     virtual int getNumTrees() {

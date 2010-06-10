@@ -17,6 +17,7 @@
 #include "Rand.h"
 #include "Alias.h"
 #include "TGM.h"
+#include "Quartets.h"
 using namespace std;
 
 static double LOG_ZERO = log(0);
@@ -302,7 +303,7 @@ public:
       nodes[i] = new Node(i,0);
     for(int i=0;i<numEdges;i++)
       edges[i] = new Edge(i);
-    connect(top);
+    construct(top);
     setAllTaxa();
   }
   ~Tree() {
@@ -311,10 +312,9 @@ public:
     for(int i=0;i<numEdges;i++)
       delete edges[i];
   }
-  void connect(string);
+  void construct(string&);
   Node* connectInt(istream&,int&,int&,int&);
   Node* connectThreeNodes(Node*,Node*,Node*,int&,int&);
-  void connectTwoNodes(Node*,Node*,int&,int&);
   void print(ostream&) const;
   void setAllTaxa();
   void getSplits(SplitSet&);
@@ -332,6 +332,7 @@ private:
   vector<Node *> nodes;
   vector<Edge *> edges;
   string top;
+  Node *root;
 };
 
 class SplitSet {

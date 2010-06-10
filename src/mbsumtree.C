@@ -44,15 +44,15 @@ void Node::setNumbers(int& nextNumber,Edge* parentEdge) {
   setNumber(nextNumber++);
 }
 
-void Tree::setNumbers() {
+void Tree::setNumbers(Node* root) {
   // Internal nodes are not numbered when tree is read.
   // After reading the tree, we can give numbers to the internal nodes.
   int nextNumber = maxTaxNumber + 1;
-  for(int i=0;i<nodes[0]->getNumEdges();i++) {
-    Edge* e = nodes[0]->getEdge(i);
-    e->getOtherNode(nodes[0])->setNumbers(nextNumber,e);
+  for(int i=0;i<root->getNumEdges();i++) {
+    Edge* e = root->getEdge(i);
+    e->getOtherNode(root)->setNumbers(nextNumber,e);
   }
-  nodes[0]->setNumber(nextNumber);
+  root->setNumber(nextNumber);
 }
 
 int Node::setMinTaxa(Edge* parentEdge) {
@@ -303,10 +303,42 @@ Tree::Tree(string line,int lineNumber, Pruner* aPruner):thePruner(aPruner)
   if (numNodes == 0) //pruning can make a void tree
     return;
 
-  // give numbers to internal nodes
-  setNumbers();
+  // pick last taxon as outgroup. So last taxons parent is root
+  Node *root;
+  for (int i = 0; i < nodes.size(); i++) {
+      if (nodes[i]->getNumber() == maxTaxNumber) {
+          root = nodes[i]->getEdge(0)->getOtherNode(nodes[i]);
+          break;
+      }
+  }
+
+  if (root != nodes[0] && nodes[0]->getNumEdges() == 2) {
+      // Root of tree is changed to a different node. If old root has only
+      // two neighbors(implies one child after changing root) 
+      // then we should merge old root with one of its neighbors to follow
+      //  the rule that every node has at least 2 childs. 
+      Edge *e1 = nodes[0]->getEdge(0);
+      Edge *e2 = nodes[0]->getEdge(1);
+
+      Node *n1 = e1->getOtherNode(nodes[0]);
+      Node *n2 = e2->getOtherNode(nodes[0]);
+      for (int i = 0; i < n1->getNumEdges(); i++) {
+          if (n1->getEdge(i) == e1) {
+              n1->setEdge(e2, i);
+              e2->setNodes(n1, n2);
+              break;
+          }
+      }
+     nodes.erase(nodes.begin()); 
+     numNodes--;
+     numEdges--;
+     edges.erase(find(edges.begin(), edges.end(), e1));
+  }
+
+  // give numbers to internal nodes, and picks root to be last taxon's neighbor
+  setNumbers(root);
   // set minTaxa
-  setMinTaxa(nodes[0]);
+  setMinTaxa(root);
   // sort nodes
   sort(nodes.begin(),nodes.end(),cmpNodes);
   // reorder edges in nodes
@@ -342,26 +374,43 @@ void Tree::printTop(ostream& f) {
   f << "(";
   int degree = root->getNumEdges();
   if(degree==2) {
+    // convert a rooted tree to unrooted - required for bucky
+    // degree 2 is covnerted to degree 3 by merging root with one of its childs
+    Node* n1 = root->getEdge(0)->getOtherNode(root);
+    Node* n2 = root->getEdge(1)->getOtherNode(root);
+    int k = 0;
+    for (int i = 0; i < n1->getNumEdges(); i++) {
+      Node *other = n1->getEdge(i)->getOtherNode(n1);
+      if (other == root)
+        continue;
+      other->printTop(f, n1->getEdge(i));
+      k++;
+      f << ",";
+    }
+
+    if (k == 2) {
+        n2->printTop(f, root->getEdge(1));
+    }
+    else {
+      for (int i = 0; i < n2->getNumEdges(); i++) {
+        Node *other = n2->getEdge(i)->getOtherNode(n2);
+        if (other == root)
+          continue;
+        other->printTop(f, n2->getEdge(i));
+        if (k < 2) {
+            f << ",";
+        }
+        k++;
+      }
+    }
+  }
+  else { // degree is 3 or more
     for(int i=0;i<degree;i++) {
       Edge* e = root->getEdge(i);
       e->getOtherNode(root)->printTop(f,e);
       if(i < degree-1)
         f << ",";
     }
-  }
-  else { // degree is 3 or more
-    // combine last degree-1 subtrees
-    // so as to root the tree --required for bucky
-    Edge* first = root->getEdge(0);
-    first->getOtherNode(root)->printTop(f,first);
-    f << ",(";
-    for(int i=1;i<degree;i++) {
-      Edge* e = root->getEdge(i);
-      e->getOtherNode(root)->printTop(f,e);
-      if(i < degree-1)
-        f << ",";
-    }
-    f << ")";
   }
   f << ");";
 }

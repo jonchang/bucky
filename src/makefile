@@ -2,8 +2,8 @@
 # To compile, type "make" or make "all"
 # To remove files, type "make clean"
 #
-OBJS = TaxonSet.o Alias.o mbsumtree.o
-TARGET = server
+OBJS = TaxonSet.o Alias.o mbsumtree.o TGM.o Quartets.o
+TARGET = all
 
 CC = g++
 CFLAGS = -O3 -I.
