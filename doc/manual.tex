@@ -306,6 +306,7 @@ will be saved every $s$ updates. This option will have an effect only if option
 will be included in the list to have their summary information and their genome-wide CF
 displayed. Default is $0.05$.\\
 {\tt -p file-with-prune table}& Default is to only consider taxa common to all genes, and prune all other taxa from the trees. This option allows the user to indicate which taxa should be retained in the analysis. These taxa are specified in a standard translate table, in a separate input file.\\
+{\tt -sg}& Use this option to skip processing genes that do not have taxa of interest. Use {\tt -p} option to specify taxa of interest. \\
 \verb+--calculate-pairs+&Use this option to calculate the 
 posterior probability that pairs of loci share the same tree. Default is 
 to {\sc not} use this option.\\
@@ -485,6 +486,10 @@ To prune the analysis to a specific set of taxa, the option {\tt -p}
 can be used with a file containing the taxon list like this:
 \begin{verbatim}
 bucky -n 150000 -p data/yeast/shortTaxonList -i data/yeast/yeast_inputfilelist
+\end{verbatim}
+The above command spits out an error message if some genes do not have all taxa of interest. If you would like bucky to skip such genes and analyze the rest, {\tt -sg} can be used. Example:
+\begin{verbatim}
+bucky -n 150000 -p data/yeast/shortTaxonList -sg -i data/yeast/yeast_inputfilelist
 \end{verbatim}
 \section{General notes}
 
