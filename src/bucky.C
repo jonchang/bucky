@@ -216,8 +216,8 @@ void getTaxaSubset(vector<string>& inputFiles, map<string, int>& prunedTranslate
     set<string> output;
     int count = taxaInIFile.size();
     set_intersection(taxaNames.begin(), taxaNames.end(), taxaInIFile.begin(), taxaInIFile.end(), inserter(output, output.begin()));
-    if (shouldPruneGene && (taxaNames.size() != output.size() || taxaNames.size() != taxaInIFile.size())) {
-        cerr << "Skipping gene " << inputFiles[fileNum] << " as translate table does not match with that of reference gene: " << firstFile << endl;
+    if (shouldPruneGene && (taxaNames.size() != output.size() || taxaNames.size() > taxaInIFile.size())) {
+        cerr << "Skipping gene " << inputFiles[fileNum] << " as translate table does not match with that of reference: " << firstFile << endl;
         genesToIgnore.push_back(fileNum);
     }
     else {
@@ -880,31 +880,32 @@ void usage(Defaults defaults)
 {
   cerr << "Usage: bucky [options] <input files>" << endl << endl;
   cerr << "  Options:" << endl;
-  cerr << "  Parameter              | Usage                      | Default Value" << endl;
+  cerr << "  Parameter                      | Usage                      | Default Value" << endl;
   cerr << "  -------------------------------------------------------------------" << endl;
-  cerr << "  alpha                  | -a number                  | " << defaults.getAlpha() << endl;
-  cerr << "  # of runs              | -k integer                 | " << defaults.getNumRuns() << endl;
-  cerr << "  # of MCMC updates      | -n integer                 | " << defaults.getNumUpdates() << endl;
-  cerr << "  # of chains            | -c integer                 | " << defaults.getNumChains() << endl;
-  cerr << "  MCMCMC Rate            | -r integer                 | " << defaults.getMCMCMCRate() << endl;
-  cerr << "  alpha multiplier       | -m number                  | " << defaults.getAlphaMultiplier() << endl;
-  cerr << "  subsample rate         | -s integer                 | " << defaults.getSubsampleRate() << endl;
-  cerr << "  output root file name  | -o name                    | " << defaults.getRootFileName() << endl;
-  cerr << "  input file list file   | -i filename                | " << defaults.getInputListFileName() << endl;
-  cerr << "  random seed 1          | -s1 integer                | " << defaults.getSeed1() << endl;
-  cerr << "  random seed 2          | -s2 integer                | " << defaults.getSeed2() << endl;
-  cerr << "  CF cutoff for display  | -cf number                 | " << defaults.getSwCFcutoff() << endl;
-  cerr << "  create sample file     | --create-sample-file       | " << (defaults.getCreateSampleFile() == true ? "true" : "false") << endl;
-  cerr << "  create joint file      | --create-joint-file        | " << (defaults.getCreateJointFile() == true ? "true" : "false") << endl;
-  cerr << "  create single file     | --create-single-file       | " << (defaults.getCreateSingleFile() == true ? "true" : "false") << endl;
-  cerr << "  use independence prior | --use-independence-prior   | " << (defaults.getUseIndependencePrior() == true ? "true" : "false") << endl;
-  cerr << "  calculate pairs        | --calculate-pairs          | " << (defaults.getCalculatePairs() == true ? "true" : "false") << endl;
-  cerr << "  taxon set              | -p prune-file              | common taxa" << endl;
-  cerr << "  use update groups      | --use-update-groups        | " << (defaults.getUseUpdateGroups() == true ? "true" : "false") << endl;
-  cerr << "  use update groups      | --do-not-use-update-groups | " << endl;
-  cerr << "  Space optimization     | --opt-space                | " << (defaults.shouldOptSpace() == true ? "true" : "false") << endl;
-  cerr << "  help                   | -h OR --help               |" << endl;
-  cerr << "  version                | --version                  |" << endl;
+  cerr << "  alpha                          | -a number                  | " << defaults.getAlpha() << endl;
+  cerr << "  # of runs                      | -k integer                 | " << defaults.getNumRuns() << endl;
+  cerr << "  # of MCMC updates              | -n integer                 | " << defaults.getNumUpdates() << endl;
+  cerr << "  # of chains                    | -c integer                 | " << defaults.getNumChains() << endl;
+  cerr << "  MCMCMC Rate                    | -r integer                 | " << defaults.getMCMCMCRate() << endl;
+  cerr << "  alpha multiplier               | -m number                  | " << defaults.getAlphaMultiplier() << endl;
+  cerr << "  subsample rate                 | -s integer                 | " << defaults.getSubsampleRate() << endl;
+  cerr << "  output root file name          | -o name                    | " << defaults.getRootFileName() << endl;
+  cerr << "  input file list file           | -i filename                | " << defaults.getInputListFileName() << endl;
+  cerr << "  random seed 1                  | -s1 integer                | " << defaults.getSeed1() << endl;
+  cerr << "  random seed 2                  | -s2 integer                | " << defaults.getSeed2() << endl;
+  cerr << "  CF cutoff for display          | -cf number                 | " << defaults.getSwCFcutoff() << endl;
+  cerr << "  create sample file             | --create-sample-file       | " << (defaults.getCreateSampleFile() == true ? "true" : "false") << endl;
+  cerr << "  create joint file              | --create-joint-file        | " << (defaults.getCreateJointFile() == true ? "true" : "false") << endl;
+  cerr << "  create single file             | --create-single-file       | " << (defaults.getCreateSingleFile() == true ? "true" : "false") << endl;
+  cerr << "  use independence prior         | --use-independence-prior   | " << (defaults.getUseIndependencePrior() == true ? "true" : "false") << endl;
+  cerr << "  calculate pairs                | --calculate-pairs          | " << (defaults.getCalculatePairs() == true ? "true" : "false") << endl;
+  cerr << "  taxon set                      | -p prune-file              | common taxa" << endl;
+  cerr << "  skip genes with fewer taxa     | -sg                        | false" << endl;
+  cerr << "  use update groups              | --use-update-groups        | " << (defaults.getUseUpdateGroups() == true ? "true" : "false") << endl;
+  cerr << "  use update groups              | --do-not-use-update-groups | " << endl;
+  cerr << "  Space optimization             | --opt-space                | " << (defaults.shouldOptSpace() == true ? "true" : "false") << endl;
+  cerr << "  help                           | -h OR --help               |" << endl;
+  cerr << "  version                        | --version                  |" << endl;
   cerr << "  -------------------------------------------------------------------" << endl << endl;
   exit(1);
 }
@@ -1125,7 +1126,7 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
       rp.setPruneFile(argv[++k]);
       k++;
     }
-    else if (flag =="-pg") {
+    else if (flag =="-sg") {
       rp.setPruneGene(true);
       k++;
     }
@@ -1182,6 +1183,10 @@ void readInputFiles(vector<string>& inputFiles,Table* &tgm, vector<string>& tran
   bool changed = false;
   map<string, int> translateMap;
   getTaxaSubset(inputFiles, translateMap, translateTable, prunefile, shouldPruneGene, changed);
+  if (inputFiles.size() == 0) {
+      cerr << "All genes skipped by the pruning step, Exiting..." << endl;
+      exit(0);
+  }
   if (translateTable.size() < 4) {
     cerr << "Too few taxa (" << translateTable.size() << ") left after pruning process, Taxa common to all genes:" << endl;
     for (map<string,int>::iterator itr = translateMap.begin(); itr != translateMap.end(); itr++) {
