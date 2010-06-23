@@ -9,6 +9,7 @@
 #include<algorithm>
 #include<functional>
 #include<set>
+#include<map>
 using namespace std;
 #include "boost/unordered_map.hpp"
 using namespace boost;
@@ -141,6 +142,7 @@ void TreeBuilder::getTree(Table* newTable, int numTaxa, string& top, string& top
         }
 
         wt /= (double) abcd;
+        double s = wt;
         //convert prob to # of coalescent units.
         if (wt > 0.99997)
             wt = 10.0;
@@ -150,6 +152,27 @@ void TreeBuilder::getTree(Table* newTable, int numTaxa, string& top, string& top
             wt = -log10(3.0/2.0 * (1-wt));
 
         e->addWeight(wt);
+
+        // update tie info with weight, # coalescent units
+        if (ties.size() != 0) {
+            stringstream str1, str2;
+            n1->print(str1);
+            map<string, TieInfo*>::iterator it = ties.find(str1.str());
+            if (it != ties.end()) {
+                TieInfo*& info = it->second;
+                info->setSupport(s);
+                info->setCUnits(wt);
+                continue;
+            }
+
+            n2->print(str2);
+            it = ties.find(str2.str());
+            if (it != ties.end()) {
+                TieInfo*& info = it->second;
+                info->setSupport(s);
+                info->setCUnits(wt);
+            }
+        }
     }
 
     t.modifyOutgroup(numTaxa, top, topWithWts);//choose last taxon as outgroup and print topologies to top, topWithWts.
@@ -291,6 +314,7 @@ string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> >& counts, in
             double conf = computeConfidence(maxI, maxJ, activeNodes, counts);
             double sz = size[maxI - 1][maxJ - 1];
             maxSupport = conf / sz;
+            string mStr = superNodes[maxI - 1]->printWithSuperNode(superNodes[maxJ - 1]);
 
             for (int j = 0; j < maxIs.size(); j++) {
                 int node1 = maxIs[j];
@@ -300,10 +324,51 @@ string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> >& counts, in
                 double support = conf / sz;
 
                 if (support > maxSupport) {
+                    //maxI, maxJ is no longer the chosen one. Delete all its tieinfo.
+                    map<string, TieInfo*>::iterator it = ties.find(mStr);
+                    if (it != ties.end()) {
+                        TieInfo*& info = it->second;
+                        ties.erase(mStr);
+                        delete info;
+                    }
                     maxI = node1;
                     maxJ = node2;
                     maxSupport = support;
+                    mStr = superNodes[maxI - 1]->printWithSuperNode(superNodes[maxJ - 1]);
                 }
+                else if (support == maxSupport) {
+                    map<string, TieInfo*>::iterator it = ties.find(mStr);
+                    TieInfo* info;
+                     if (it == ties.end()) {
+                        info = new TieInfo();
+                        ties[mStr] = info;
+                    }
+                    else {
+                        info = it->second;
+                    }
+
+                    stringstream strm1, strm2;
+                    superNodes[node1-1]->print(strm1);
+                    superNodes[node2-1]->print(strm2);
+                    if (superNodes[node1-1]->getLowestTaxon() < superNodes[node2-1]->getLowestTaxon())
+                        info->addTieInfo(strm1.str(), strm2.str());
+                    else
+                        info->addTieInfo(strm2.str(), strm1.str());
+                }
+            }
+
+            map<string, TieInfo*>::iterator it = ties.find(mStr);
+            if (it != ties.end()) {
+                TieInfo*& info = it->second;
+                stringstream qStr;
+                qStr << mStr;
+                qStr << "|";
+                for (int i = 0; i < activeNodes.size(); i++) {
+                    int node = activeNodes[i];
+                    if (node == maxI || node == maxJ) continue;
+                    superNodes[node-1]->print(qStr);
+                }
+                info->setTiedQuartet(qStr.str());
             }
         }
 
@@ -474,19 +539,39 @@ double TreeBuilder::computeNewCardinality(int maxI, int maxJ, int node1, int num
     return sz;
 }
 
+void TreeBuilder::printTies(ostream& f) {
+    if (ties.empty())
+        return;
+
+    map<string, TieInfo*>::iterator tieitr = ties.begin();
+    f << "Ties in Population Tree:" << endl;
+    f << "Quartet,\t Weight, #Coalescent Units, Ties(Separated by ';') " << endl;
+    for(;tieitr != ties.end(); tieitr++) {
+        TieInfo *info = tieitr->second;
+        if (info == NULL)
+            continue;
+
+        f << info->getTiedQuartet() << ",\t " << setw(3) << info->getSupport() << ", " << setw(3) << info->getCUnits() << ",\t ";
+        info->print(f);
+        f << endl;
+    }
+    f << endl;
+}
 
 Node* Node::getNeighbor(int i) const { return edges[i]->getOtherNode(this); }
 
 void Node::print(ostream& f) const
 {
-    f << setw(3) << number << ":" << *t[0] << ":" << *t[1] << ":" << *t[2] << ":";
-    for(int i=0;i<3;i++) {
-        if(i>0 && !leaf)
-            f << ",";
-        if(i==0 || !leaf)
-            f << " e[" << edges[i]->getNumber() << "] -> " << "n[" << getNeighbor(i)->getNumber() << "]";
+    if (leaf) {
+        f << t[0]->getTSet()[0];
+        return;
     }
-    f << endl;
+
+    f << "(";
+    getNeighbor(1)->print(f);
+    f << ",";
+    getNeighbor(2)->print(f);
+    f << ")";
 }
 
 void Node::print(ostream& f, ostream& topStr, const Node *caller, const Node *root, int numTaxa) const

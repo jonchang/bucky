@@ -1355,7 +1355,7 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
 		 int numGenes,RunParameters& rp,ModelParameters& mp,Table *newTable,
 		 vector<vector<int> >& clusterCount, vector<TaxonSet>& splits,  vector<vector<vector<int> > >& splitsGeneMatrix,
 		 vector<vector<int> >& pairCounts,   vector<Gene*>& genes, vector<double>& alphas,
-		 vector<vector<int> >& mcmcmcAccepts,vector<vector<int> >& mcmcmcProposals, vector<string>& translateTable, string quartetTree, string quartetTreeWithWts)
+		 vector<vector<int> >& mcmcmcAccepts,vector<vector<int> >& mcmcmcProposals, vector<string>& translateTable)
 {
   // .joint
   if(rp.getCreateJointFile()) {
@@ -1597,6 +1597,9 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
     taxaNum++;
   }
 
+  quartet::TreeBuilder tb;
+  string quartetTree, quartetTreeWithWts;
+  tb.getTree(newTable, numTaxa, quartetTree, quartetTreeWithWts);
   concordanceStr << "Population Tree:" << endl;
   concordanceStr << quartetTree << endl << endl;
   ConcordanceTree z(tset,numGenes);
@@ -1698,6 +1701,8 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
     while(sum < .950)  sum += splitsGeneMatrixPP[i][++hi];
     concordanceStr << "90% CI for CF = (" << lo << "," << hi << ")" << endl << endl;
   }
+
+  tb.printTies(concordanceStr);
   cout << "done." << endl;
   fout << "done." << endl;
 
@@ -2244,13 +2249,9 @@ int main(int argc, char *argv[])
 	 delete sampleFileStr[irun];
     }
 
-  quartet::TreeBuilder tb;
-  string quartetTree, quartetTreeWithWts;
-  tb.getTree(newTable, numTaxa, quartetTree, quartetTreeWithWts);
-
   writeOutput(fout,fileNames,max,numTrees,numTaxa,topologies,numGenes,rp,mp,
 	      newTable,clusterCount,splits,splitsGeneMatrix,
-	      pairCounts,genes,alphas,mcmcmcAccepts,mcmcmcProposals, translateTable, quartetTree, quartetTreeWithWts);
+	      pairCounts,genes,alphas,mcmcmcAccepts,mcmcmcProposals, translateTable);
 
   for(int i=0;i<numGenes;i++)
     delete genes[i];
