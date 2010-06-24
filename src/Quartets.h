@@ -114,7 +114,8 @@ private:
 
 class Tree {
 public:
-  Tree(int nTaxa,string top) {
+  Tree(int nTaxa,string t) {
+    top = t;
     numTaxa = nTaxa;
     numNodes = 2*numTaxa - 2;
     numEdges = 2 * numTaxa - 3;
@@ -176,6 +177,7 @@ public:
         node =  new Node(n, lf);
         if (lf) {
             numLeafs = 1;
+            lowestTaxon = n;
         }
         else {
             numLeafs = 0;
@@ -184,9 +186,16 @@ public:
 
     void add(SuperNode *lc, SuperNode *rc) {
         numLeafs = lc->numLeafs + rc->numLeafs;
-        left = lc;
-        right = rc;
+        if (lc->lowestTaxon < rc->lowestTaxon) {
+            left = lc;
+            right = rc;
+        }
+        else {
+            left = rc;
+            right = lc;
+        }
 
+        lowestTaxon = left->lowestTaxon;
     }
 
     void setLeft(SuperNode *l) {
@@ -213,6 +222,10 @@ public:
         return numLeafs;
     }
 
+    int getLowestTaxon() {
+        return lowestTaxon;
+    }
+
     void print(ostream& f) {
         if (node->isLeaf()) {
             f << node->getNumber();
@@ -227,23 +240,96 @@ public:
         }
         f << ")";
     }
+
+    string printWithSuperNode(SuperNode *n2) {
+        stringstream mStream;
+        if (lowestTaxon < n2->lowestTaxon) {
+            mStream << "(";
+            print(mStream);
+            mStream << ",";
+            n2->print(mStream);
+            mStream << ")";
+        }
+        else {
+            mStream << "(";
+            n2->print(mStream);
+            mStream << ",";
+            print(mStream);
+            mStream << ")";
+        }
+
+        return mStream.str();
+    }
+
 private:
     Node* node;
     int numLeafs;
+    int lowestTaxon;
     // each supernode can refer to two other supernodes at max except for root
     SuperNode *left;
     SuperNode *right;
+
+};
+
+class TieInfo {
+public:
+    TieInfo(){
+    }
+
+    void print(ostream& f) {
+        for (vector<string>::iterator itr1 = tieNodes1.begin(), itr2 = tieNodes2.begin(); itr1 != tieNodes1.end(); itr1++, itr2++) {
+            f << *itr1 << "," << *itr2 << "; " ;
+        }
+        f << endl;
+    }
+
+    void addTieInfo(string s1, string s2) {
+        tieNodes1.push_back(s1);
+        tieNodes2.push_back(s2);
+    }
+
+    void setSupport(double s) {
+        support = s;
+    }
+
+    void setCUnits(double cu) {
+        cUnits = cu;
+    }
+
+    void setTiedQuartet(string q) {
+        tiedQuartet = q;
+    }
+
+    double getSupport() {
+        return support;
+    }
+
+    double getCUnits() {
+        return cUnits;
+    }
+
+    string getTiedQuartet() {
+        return tiedQuartet;
+    }
+
+private:
+    vector<string> tieNodes1, tieNodes2;
+    double support; //tied support value
+    double cUnits; // support value in coalescent units
+    string tiedQuartet;
 };
 
 class TreeBuilder {
 public:
     void getTree(Table* newTable, int numTaxa, string& top, string& topWithWts);
+    void printTies(ostream& f);
 private:
-    string getTreeFromQuartetCounts(vector<vector<double> > counts, int numTaxa);
+    string getTreeFromQuartetCounts(vector<vector<double> >& counts, int numTaxa);
     double computeConfidence(int m, int n, vector<int>& activeNodes, vector<vector<double> >& counts);
     double computeNewConfidence(int i, int j, int b, vector<int>& activeNodes, vector<vector<double> >& counts, vector<vector<double> >& confidence);
     double computeNewCardinality(int maxI, int maxJ, int node1, int numTaxa, vector<int>& activeNodes, vector<vector<double> >& size);
     vector<SuperNode*> superNodes;
+    map<string, TieInfo*> ties;
 };
 }
 #endif /* QUARTETS_H_ */
