@@ -933,6 +933,7 @@ void showParameters(ostream& f,FileNames& fn,Defaults defaults,ModelParameters& 
   f << "  calculate pairs        | --calculate-pairs        | " << left << setw(14) << (defaults.getCalculatePairs() == true ? "true" : "false")       << "| " << (rp.getCalculatePairs() ? "true" : "false" ) << endl;
   f << "  use update groups      | --use-update-groups      | " << left << setw(14) << (defaults.getUseUpdateGroups() == true ? "true" : "false")      << "| " << (rp.getUseUpdateGroups() ? "true" : "false")<< endl;
   f << "  File with prune list   | -p pruneFile             | " << left << setw(14) << ""                                                              << "| " << rp.getPruneFile() << endl;
+  f << "  skip genes             | -sg                      | " << left << setw(14) <<"false" << "| " << (rp.getPruneGene() ? "true" : "false")<< endl;
   f << "  Space optimization     | --opt-space              | " << left << setw(14) << (defaults.shouldOptSpace() == true ? "true" : "false")          << "| " << (rp.shouldOptSpace() ? "true" : "false") << endl;
   f << "  ------------------------------------------------------------------------------" << endl;
 }
