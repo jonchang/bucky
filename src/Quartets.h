@@ -11,6 +11,8 @@ private:
     vector<int> qs;
 };
 
+class SuperNode;
+
 class TaxonSet {
 public:
     TaxonSet() {
@@ -41,10 +43,25 @@ public:
         }
     }
 
+    int intersect(TaxonSet*& other) {
+        vector<int>& t2 = other->tset;
+        vector<int> v(tset.size() + t2.size());
+        vector<int>::iterator it = set_intersection(tset.begin(), tset.end(), t2.begin(), t2.end(), v.begin());
+        if (it -v.begin() > 0 && tset.size() == t2.size() && t2.size() == v.size()) {
+            return numeric_limits<int>::max();
+        }
+        return int(it - v.begin());
+    }
+
+    void printWithTaxonSet(ostream &str, TaxonSet*& other, int numTaxa);
+
     friend ostream& operator<<(ostream& f, TaxonSet& t) {
         for (vector<int>::iterator itr = t.tset.begin(); itr != t.tset.end(); itr++) {
             f << *itr << ",";
         }
+
+        long pos = f.tellp();
+        f.seekp(pos - 1);//remove last ','
         return f;
     }
 
@@ -153,7 +170,7 @@ public:
   void modifyOutgroup(int,string&,string&) const;
   void setAllTaxa();
   void getQuartets(vector<int>& rInd, vector<int>& cInd);
-  int getQuartets(vector<int>& rInd, vector<int>& cInd, Node *n1, Node *n2);
+  int getQuartets(vector<int>& rInd, vector<int>& cInd, Node *n1, Node *n2, string& quartet);
   int getNumTaxa() const { return numTaxa; }
   int getNumNodes() const { return numNodes; }
   int getNumEdges() const { return numEdges; }
@@ -162,7 +179,7 @@ public:
   Edge* getEdge(int i) const { return edges[i]; }
   string getTop() const { return top; }
   int intersect(vector<int>& t1, vector<int>& t2);
-  void getTsets(vector<vector <int> >& tsets, Node *n1, Node *n2);
+  void getTsets(vector<TaxonSet*>& tsets, Node *n1, Node *n2);
 private:
   int numTaxa,numNodes,numEdges,numSplits;
   vector<Node *> nodes;
@@ -174,10 +191,14 @@ private:
 class SuperNode {
 public:
     SuperNode(int n, int lf) {
-        node =  new Node(n, lf);
+        number = n;
+        tset = new TaxonSet();
         if (lf) {
             numLeafs = 1;
-            lowestTaxon = n;
+            stringstream str;
+            str << n;
+            topology = str.str();
+            tset->add(n);
         }
         else {
             numLeafs = 0;
@@ -186,7 +207,7 @@ public:
 
     void add(SuperNode *lc, SuperNode *rc) {
         numLeafs = lc->numLeafs + rc->numLeafs;
-        if (lc->lowestTaxon < rc->lowestTaxon) {
+        if (lc->getLowestTaxon() < rc->getLowestTaxon()) {
             left = lc;
             right = rc;
         }
@@ -195,7 +216,9 @@ public:
             right = lc;
         }
 
-        lowestTaxon = left->lowestTaxon;
+        tset->merge(lc->tset);
+        tset->merge(rc->tset);
+        topology = "(" + left->topology + "," + right->topology + ")";
     }
 
     void setLeft(SuperNode *l) {
@@ -214,60 +237,58 @@ public:
         return right;
     }
 
-    int getNumber() {
-        return node->getNumber();
-    }
-
     int getNumNodes() {
         return numLeafs;
     }
 
     int getLowestTaxon() {
-        return lowestTaxon;
+        return tset->getTSet()[0];
+    }
+
+    string getTopology() {
+        return topology;
+    }
+
+    TaxonSet* getTaxa() {
+        return tset;
     }
 
     void print(ostream& f) {
-        if (node->isLeaf()) {
-            f << node->getNumber();
-            return;
-        }
-
-        f << "(";
-        if (left != NULL) {
-            left->print(f);
-            f << ",";
-            right->print(f);
-        }
-        f << ")";
+        f << topology;
     }
 
+
+    // if this represents (2,4) and n2 represents (1,3)
+    // output will be ((1,3),(2,4))
     string printWithSuperNode(SuperNode *n2) {
         stringstream mStream;
-        if (lowestTaxon < n2->lowestTaxon) {
-            mStream << "(";
-            print(mStream);
-            mStream << ",";
-            n2->print(mStream);
-            mStream << ")";
+        if (getLowestTaxon() < n2->getLowestTaxon()) {
+            mStream << "(" << topology << "," << n2->topology << ")";
         }
         else {
-            mStream << "(";
-            n2->print(mStream);
-            mStream << ",";
-            print(mStream);
-            mStream << ")";
+            mStream << "(" << n2->topology << "," << topology << ")";
         }
 
         return mStream.str();
     }
 
+    // if n1 represents (2,5) and n2 represents (1,3) and numTaxa is 6
+    // output will be 1,2,3,5 | 4,6
+    // required for printing tie information at the end of .concordance file.
+    string printUngroupedWithSuperNode(SuperNode *n2, int numTaxa) {
+        stringstream str;
+        tset->printWithTaxonSet(str, n2->tset, numTaxa);
+        return str.str();
+    }
+
 private:
-    Node* node;
+    int number;
     int numLeafs;
-    int lowestTaxon;
     // each supernode can refer to two other supernodes at max except for root
     SuperNode *left;
     SuperNode *right;
+    TaxonSet *tset;
+    string topology;//topology represented by this supernode. For example if node has 2,1 as childs, topology would be (1,2)
 
 };
 
@@ -277,15 +298,16 @@ public:
     }
 
     void print(ostream& f) {
-        for (vector<string>::iterator itr1 = tieNodes1.begin(), itr2 = tieNodes2.begin(); itr1 != tieNodes1.end(); itr1++, itr2++) {
-            f << *itr1 << "," << *itr2 << "; " ;
+        f << tiedQuartet << "\t" << support << ", " << cUnits << ",  ";
+        for (set<string>::iterator itr1 = ties.begin(); itr1 != ties.end();) {
+            f << *itr1;
+            if (++itr1 != ties.end()) f << ", " ;
         }
         f << endl;
     }
 
-    void addTieInfo(string s1, string s2) {
-        tieNodes1.push_back(s1);
-        tieNodes2.push_back(s2);
+    void addTieInfo(int node1, int node2, vector<SuperNode *>& superNodes, int numTaxa) {
+        ties.insert(superNodes[node1-1]->printUngroupedWithSuperNode(superNodes[node2-1], numTaxa));
     }
 
     void setSupport(double s) {
@@ -313,7 +335,7 @@ public:
     }
 
 private:
-    vector<string> tieNodes1, tieNodes2;
+    set<string> ties;
     double support; //tied support value
     double cUnits; // support value in coalescent units
     string tiedQuartet;
@@ -324,12 +346,12 @@ public:
     void getTree(Table* newTable, int numTaxa, string& top, string& topWithWts);
     void printTies(ostream& f);
 private:
-    string getTreeFromQuartetCounts(vector<vector<double> >& counts, int numTaxa);
+    string getTreeFromQuartetCounts(vector<vector<double> >& counts, int numTaxa, map<string, TieInfo*>& ties);
     double computeConfidence(int m, int n, vector<int>& activeNodes, vector<vector<double> >& counts);
     double computeNewConfidence(int i, int j, int b, vector<int>& activeNodes, vector<vector<double> >& counts, vector<vector<double> >& confidence);
     double computeNewCardinality(int maxI, int maxJ, int node1, int numTaxa, vector<int>& activeNodes, vector<vector<double> >& size);
     vector<SuperNode*> superNodes;
-    map<string, TieInfo*> ties;
+    vector<TieInfo*> qlist; // list of quartets, their supports n tie info
 };
 }
 #endif /* QUARTETS_H_ */
