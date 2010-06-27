@@ -17,6 +17,7 @@ using namespace boost;
 #include "Quartets.h"
 using namespace quartet;
 
+string DUMMY = "NONEED";
 vector<vector<int> > nCr;
 void precomputeNcR(int numTaxa) {
     // compute nC1, nC2, nC3, nC4 for n in [0, numTaxa - 1], this is used for ranking quartets
@@ -94,6 +95,117 @@ void getQuartetRowColumnIndex(int t1, int t2, int t3, int t4, int& rIndex, int& 
     }
 }
 
+void printQuartet(string& quartet, TaxonSet*& t1, TaxonSet*& t2, TaxonSet*& t3, TaxonSet*& t4) {
+    stringstream str1, str2;
+    int min1 = t1->getTSet()[0];
+    int min2 = t2->getTSet()[0];
+    int min3 = t3->getTSet()[0];
+    int min4 = t4->getTSet()[0];
+
+    int min5, min6;
+    if (min1 < min2) {
+        str1 << *t1;
+        str1 << "; ";
+        str1 << *t2;
+        min5 = min1;
+    }
+    else {
+        str1 << *t2;
+        str1 << "; ";
+        str1 << *t1;
+        min5 = min2;
+    }
+
+    if (min3 < min4) {
+        str2 << *t3;
+        str2 << "; ";
+        str2 << *t4;
+        min6 = min3;
+    }
+    else {
+        str2 << *t4;
+        str2 << "; ";
+        str2 << *t3;
+        min6 = min4;
+    }
+
+    if (min5 < min6) {
+        str1 << "|";
+        str2 << "}";
+        quartet = "{" + str1.str() + str2.str();
+    }
+    else {
+        str1 << "}";
+        str2 << "|";
+        quartet = "{" + str2.str() + str1.str();
+    }
+}
+
+void printSet(ostream &str, vector<int>& result) {
+    for (vector<int>::iterator it = result.begin(); it != result.end(); it++) {
+         str << *it;
+         if (it + 1 != result.end()) str << ",";
+     }
+}
+
+void printSetComplement(ostream &str, vector<int>& result, int numTaxa) {
+    int lowestTaxon = 1;
+    vector<int>::iterator it = result.begin();
+    for (; it != result.end() && lowestTaxon <= numTaxa;) {
+        if (*it != lowestTaxon) {
+            str << lowestTaxon << ",";
+        }
+        else {
+            it++;
+        }
+
+        lowestTaxon++;
+    }
+
+    if (lowestTaxon > numTaxa) {
+        for (;it != result.end(); it++) {
+            str << *it << ",";
+        }
+    }
+    else if (it == result.end()) {
+        for (;lowestTaxon <= numTaxa; lowestTaxon++) {
+            str << lowestTaxon << ",";
+        }
+    }
+    long pos = str.tellp();
+    str.seekp(pos - 1); //remove last ','
+}
+
+TaxonSet* getSetComplement(TaxonSet *t, int numTaxa) {
+    vector<int>& result = t->getTSet();
+    TaxonSet *complement = new TaxonSet();
+    int lowestTaxon = 1;
+    vector<int>::iterator it = result.begin();
+    for (; it != result.end() && lowestTaxon <= numTaxa;) {
+        if (*it != lowestTaxon) {
+            complement->add(lowestTaxon);
+        }
+        else {
+            it++;
+        }
+
+        lowestTaxon++;
+    }
+
+    if (lowestTaxon > numTaxa) {
+        for (;it != result.end(); it++) {
+            complement->add(*it);
+        }
+    }
+    else if (it == result.end()) {
+        for (;lowestTaxon <= numTaxa; lowestTaxon++) {
+            complement->add(lowestTaxon);
+        }
+    }
+
+    return complement;
+}
+
 void TreeBuilder::getTree(Table* newTable, int numTaxa, string& top, string& topWithWts) {
     vector<string> topologies = newTable->getTopologies();
     precomputeNcR(numTaxa);
@@ -123,7 +235,8 @@ void TreeBuilder::getTree(Table* newTable, int numTaxa, string& top, string& top
             counts[i][2] /= total;
         }
     }
-    top = getTreeFromQuartetCounts(counts, numTaxa);
+    map<string, TieInfo*> ties;
+    top = getTreeFromQuartetCounts(counts, numTaxa, ties);
     Tree t(numTaxa, top);
     for (int i = 0; i < numTaxa; i++) {
         t.getEdge(i)->addWeight(10.0);//set prob 1.0, branch length in #coalescent units as 10 for all leaf edges
@@ -135,7 +248,8 @@ void TreeBuilder::getTree(Table* newTable, int numTaxa, string& top, string& top
         Node *n1 = e->getNode(0);
         Node *n2 = e->getNode(1);
         vector<int> rInd, cInd;
-        int abcd = t.getQuartets(rInd, cInd, n1, n2); // returns |A||B||C||D|
+        string quartet;
+        int abcd = t.getQuartets(rInd, cInd, n1, n2, quartet); // returns |A||B||C||D|
         double wt = 0.0;
         for (int i = 0; i < rInd.size(); i++) {
             wt += counts[rInd[i]][cInd[i]];
@@ -153,26 +267,38 @@ void TreeBuilder::getTree(Table* newTable, int numTaxa, string& top, string& top
 
         e->addWeight(wt);
 
-        // update tie info with weight, # coalescent units
-        if (ties.size() != 0) {
-            stringstream str1, str2;
-            n1->print(str1);
-            map<string, TieInfo*>::iterator it = ties.find(str1.str());
+        // update quartet weight, #coalescent units
+        string top;
+        TieInfo* info;
+        if (n1->getNeighbor(0) == n2) {
+            stringstream str;
+            n1->print(str);
+            top = str.str();
+            map<string, TieInfo*>::iterator it = ties.find(top);
             if (it != ties.end()) {
-                TieInfo*& info = it->second;
-                info->setSupport(s);
-                info->setCUnits(wt);
-                continue;
+                info = it->second;
             }
-
-            n2->print(str2);
-            it = ties.find(str2.str());
-            if (it != ties.end()) {
-                TieInfo*& info = it->second;
-                info->setSupport(s);
-                info->setCUnits(wt);
+            else {
+                info = new TieInfo();
             }
         }
+        else {
+            stringstream str;
+            n2->print(str);
+            top = str.str();
+            map<string, TieInfo*>::iterator it = ties.find(top);
+            if (it != ties.end()) {
+                info = it->second;
+            }
+            else {
+                info = new TieInfo();
+            }
+        }
+
+        info->setSupport(s);
+        info->setCUnits(wt);
+        info->setTiedQuartet(quartet);
+        qlist.push_back(info);
     }
 
     t.modifyOutgroup(numTaxa, top, topWithWts);//choose last taxon as outgroup and print topologies to top, topWithWts.
@@ -198,7 +324,7 @@ int getComplement(vector<int>& t1, vector<int>& t2, int numTaxa)
     }
 }
 
-string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> >& counts, int numTaxa) {
+string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> >& counts, int numTaxa, map<string, TieInfo*>& ties) {
     vector<vector<double> > normCounts(counts.size());// normalized counts
     for (int i = 0; i < counts.size(); i++) {
         normCounts[i] = counts[i];
@@ -337,38 +463,20 @@ string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> >& counts, in
                     mStr = superNodes[maxI - 1]->printWithSuperNode(superNodes[maxJ - 1]);
                 }
                 else if (support == maxSupport) {
-                    map<string, TieInfo*>::iterator it = ties.find(mStr);
-                    TieInfo* info;
-                     if (it == ties.end()) {
-                        info = new TieInfo();
-                        ties[mStr] = info;
-                    }
-                    else {
-                        info = it->second;
-                    }
+                    if (maxI == node1 || maxI == node2 || maxJ == node1 || maxJ == node2) {
+                        map<string, TieInfo*>::iterator it = ties.find(mStr);
+                        TieInfo* info;
+                        if (it == ties.end()) {
+                            info = new TieInfo();
+                            ties[mStr] = info;
+                        }
+                        else {
+                            info = it->second;
+                        }
 
-                    stringstream strm1, strm2;
-                    superNodes[node1-1]->print(strm1);
-                    superNodes[node2-1]->print(strm2);
-                    if (superNodes[node1-1]->getLowestTaxon() < superNodes[node2-1]->getLowestTaxon())
-                        info->addTieInfo(strm1.str(), strm2.str());
-                    else
-                        info->addTieInfo(strm2.str(), strm1.str());
+                        info->addTieInfo(node1, node2, superNodes, numTaxa);
+                    }
                 }
-            }
-
-            map<string, TieInfo*>::iterator it = ties.find(mStr);
-            if (it != ties.end()) {
-                TieInfo*& info = it->second;
-                stringstream qStr;
-                qStr << mStr;
-                qStr << "|";
-                for (int i = 0; i < activeNodes.size(); i++) {
-                    int node = activeNodes[i];
-                    if (node == maxI || node == maxJ) continue;
-                    superNodes[node-1]->print(qStr);
-                }
-                info->setTiedQuartet(qStr.str());
             }
         }
 
@@ -540,22 +648,16 @@ double TreeBuilder::computeNewCardinality(int maxI, int maxJ, int node1, int num
 }
 
 void TreeBuilder::printTies(ostream& f) {
-    if (ties.empty())
+    if (qlist.empty())
         return;
 
-    map<string, TieInfo*>::iterator tieitr = ties.begin();
-    f << "Ties in Population Tree:" << endl;
-    f << "Quartet,\t Weight, #Coalescent Units, Ties(Separated by ';') " << endl;
-    for(;tieitr != ties.end(); tieitr++) {
-        TieInfo *info = tieitr->second;
-        if (info == NULL)
-            continue;
-
-        f << info->getTiedQuartet() << ",\t " << setw(3) << info->getSupport() << ", " << setw(3) << info->getCUnits() << ",\t ";
+    vector<TieInfo*>::iterator tieitr = qlist.begin();
+    f << "Four-way partitions in the Population Tree:";
+    f << " sample-wide CF, coalescent units and Ties(if present)" << endl;
+    for(;tieitr != qlist.end(); tieitr++) {
+        TieInfo *info = *tieitr;
         info->print(f);
-        f << endl;
     }
-    f << endl;
 }
 
 Node* Node::getNeighbor(int i) const { return edges[i]->getOtherNode(this); }
@@ -837,41 +939,16 @@ Node *Tree::connectThreeNodes(Node* node1,Node* node2,Node* node3,int& currentLe
     return node3;
 }
 
-// returns size of set {t1 intersect t2}
-int Tree::intersect(vector<int>& t1, vector<int>& t2) {
-    vector<int> v(t1.size()> t2.size() ? t2.size() : t1.size());
-//    sort(t1.begin(), t1.end());
-//    sort(t2.begin(), t2.end());
- /*   for (int i = 0; i < t1.size(); i++) {
-        cerr << t1[i] << " ";
-    }
-    cerr << endl;
-    for (int i = 0; i < t2.size(); i++) {
-        cerr << t2[i] << " ";
-    }
-    cerr << endl;
-    cerr << "Intersection " << endl;
-    for (int i = 0; i < v.size(); i++) {
-        cerr << v[i] << " ";
-    }
-    cerr << endl;*/
-    vector<int>::iterator it = set_intersection(t1.begin(), t1.end(), t2.begin(), t2.end(), v.begin());
-    if (it -v.begin() > 0 && t1.size() == t2.size() && t2.size() == v.size()) {
-        return numeric_limits<int>::max();
-    }
-    return int(it - v.begin());
-}
-
 // returns tsets of size 4. Taxonsets on path from n1 to n2 are skipped
-void Tree::getTsets(vector<vector <int> >& tsets, Node *n1, Node *n2) {
+void Tree::getTsets(vector<TaxonSet*>& tsets, Node *n1, Node *n2) {
     int i, j;
     int matchI = 0, matchJ = 0;
     int greatestMatch = 0;
     for (i = 0; i < 3; i++) {
-        vector<int> t1 = n1->getTaxa(i);
+        TaxonSet*& t1 = n1->getTset(i);
         for (j = 0; j < 3; j++) {
-            vector<int> t2 = n2->getTaxa(j);
-            int match = intersect(t1, t2);
+            TaxonSet*& t2 = n2->getTset(j);
+            int match = t1->intersect(t2);
             if (match != 0 && match >= greatestMatch) {
                 greatestMatch = match;
                 matchI = i;
@@ -882,16 +959,9 @@ void Tree::getTsets(vector<vector <int> >& tsets, Node *n1, Node *n2) {
 
     for (int i = 0; i < 3; i++) {
         if (i != matchI) {
-            vector<int> tset = n1->getTaxa(i);
+            TaxonSet *tset = n1->getTset(i);
             if (n1 != root && i == 0) {
-                vector<int> compliment;
-                for (int i = 1; i <= numTaxa; i++) {
-                    vector<int>::iterator it = find(tset.begin(), tset.end(), i);
-                    if (it == tset.end()) {
-                        compliment.push_back(i);
-                    }
-                }
-                tsets.push_back(compliment);
+                tsets.push_back(getSetComplement(tset, numTaxa));
             }
             else {
                 tsets.push_back(tset);
@@ -901,16 +971,9 @@ void Tree::getTsets(vector<vector <int> >& tsets, Node *n1, Node *n2) {
 
     for (int i = 0; i < 3; i++) {
         if (i != matchJ) {
-            vector<int> tset = n2->getTaxa(i);
+            TaxonSet *tset = n2->getTset(i);
             if (n2 != root && i == 0) {
-                vector<int> compliment;
-                for (int i = 1; i <= numTaxa; i++) {
-                    vector<int>::iterator it = find(tset.begin(), tset.end(), i);
-                    if (it == tset.end()) {
-                        compliment.push_back(i);
-                    }
-                }
-                tsets.push_back(compliment);
+                tsets.push_back(getSetComplement(tset, numTaxa));
             }
             else {
                 tsets.push_back(tset);
@@ -924,18 +987,23 @@ void Tree::getQuartets(vector<int>& rInd, vector<int>& cInd) {
         Node *n1 = nodes[i];
         for (int j = i + 1; j < numNodes; j++) {
             Node *n2 = nodes[j];
-            getQuartets(rInd, cInd, n1 , n2);
+            getQuartets(rInd, cInd, n1 , n2, DUMMY);
         }
     }
 }
 
-int Tree::getQuartets(vector<int>& rInd, vector<int>& cInd, Node *n1, Node *n2) {
+int Tree::getQuartets(vector<int>& rInd, vector<int>& cInd, Node *n1, Node *n2, string& quartet) {
 //    for (int i = numTaxa; i < numNodes; i++) {
 
 //        for (int j = i + 1; j < numNodes; j++) {
 
-            vector<vector<int> > tsets;
-            getTsets(tsets, n1, n2);
+            vector<TaxonSet*> txnsets;
+            getTsets(txnsets, n1, n2);
+            vector<vector<int> > tsets(4);
+            for (int i = 0; i < txnsets.size(); i++) {
+                tsets[i] = txnsets[i]->getTSet();
+            }
+
             assert(tsets.size() == 4);
             for (int j1 = 0; j1 < tsets[0].size(); j1++) {
                 for (int j2 = 0; j2 < tsets[1].size(); j2++) {
@@ -949,10 +1017,32 @@ int Tree::getQuartets(vector<int>& rInd, vector<int>& cInd, Node *n1, Node *n2) 
                     }
                 }
             }
+
+            if (quartet != DUMMY) {
+                printQuartet(quartet, txnsets[0], txnsets[1], txnsets[2], txnsets[3]);
+            }
 //        }
 //    }
 
             return tsets[0].size() * tsets[1].size() * tsets[2].size() * tsets[3].size();
+}
+
+void TaxonSet::printWithTaxonSet(ostream &str, TaxonSet*& other, int numTaxa) {
+    str << "{";
+    vector<int> result(tset.size() + (other->tset).size());
+    set_union(tset.begin(), tset.begin() + tset.size(), (other->tset).begin(), (other->tset).begin() + (other->tset).size(), result.begin());
+    if (result[0] == 1) {
+        printSet(str, result);
+        str << "|";
+        printSetComplement(str, result, numTaxa);
+    }
+    else {
+        printSetComplement(str, result, numTaxa);
+        str << "|";
+        printSet(str, result);
+
+    }
+    str << "}";
 }
 
 /*int main(int argc, char *argv[]) {
