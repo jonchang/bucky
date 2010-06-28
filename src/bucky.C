@@ -1651,6 +1651,9 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
   concordanceStr << "Primary Concordance Tree with Sample Concordance Factors:" << endl;
   z.print(concordanceStr, numGenes);
 
+  tb.printTies(concordanceStr);
+  concordanceStr << endl;
+
   concordanceStr << "Splits in the Primary Concordance Tree: sample-wide ";
   if (!mp.getUseIndependencePrior())
     concordanceStr << "and genome-wide ";
@@ -1671,6 +1674,7 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
     concordanceStr << endl;
   }
   concordanceStr << endl;
+
   concordanceStr << "Splits NOT in the Primary Concordance Tree but with estimated CF > "
 		 << rp.getSwCFcutoff() <<":"<<endl;
   for(int w=0;w<otherClade.size();w++) {
@@ -1742,7 +1746,6 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
     concordanceStr << "90% CI for CF = (" << lo << "," << hi << ")" << endl << endl;
   }
 
-  tb.printTies(concordanceStr);
   cout << "done." << endl;
   fout << "done." << endl;
 
