@@ -15,6 +15,7 @@
 // version 1.2b: multiple files from the same gene can be combined.
 // version 1.3.0: Translate table, if present, are copied verbatim from
 //              the first file, assumed the same in other files.
+// version 1.4.0: requires translate tables, outputs unrooted formatted trees.
 
 // mbsum.C
 
@@ -38,7 +39,7 @@
 //
 // Usage:    mbsum [--help || -h] [<--skip || -n> number-of-skipped-trees] [<--out || -o> output-file] [--version] [input filename(s)]
 
-#define VERSION "1.3.3"
+#define VERSION "1.4.0"
 
 #include <iostream>
 #include <iomanip>

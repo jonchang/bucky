@@ -1,4 +1,4 @@
-// BUCKy 1.3 - Bayesian Untangling of Concordance Knots (applied to yeast and other organisms)
+// BUCKy 1.4- Bayesian Untangling of Concordance Knots (applied to yeast and other organisms)
 // Copyright (C) 2006-2007 by Bret Larget and Cecile Ane
 
 // This program is free software; you can redistribute it and/or modify
@@ -99,8 +99,8 @@
 #include "mbsumtree.h"
 
 using namespace std;
-string VERSION = "1.3.2";
-string DATE = "8 March 2010";
+string VERSION = "1.4.0";
+string DATE = "28 June 2010";
 string COPYRIGHT = "Copyright (C) 2006-2010 by Bret Larget and Cecile Ane";
 
 int countTaxa(string top) {
