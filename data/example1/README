@@ -14,6 +14,6 @@ Look at test1.concordance to see that the three uncertain splits each have proba
 
 Compare .concordance results with this command.
 
-  bucky -o test2 -c 4 --no-use-update-groups ex*/ex*.in
+  bucky -o test2 -c 4 --do-not-use-update-groups ex*/ex*.in
 
 The file test2.concordance has the wrong posterior probability, and adding chains does not help.

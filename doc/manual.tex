@@ -506,10 +506,15 @@ but then the resulting concordance factors may not have an
 easy interpretation.
 
 If hundreds of genes are to be analyzed, the analysis of these
-genes needs to be automated. One way to proceed is to have 
-all the alignments in a single nexus file. In the first step, MrBayes 
-can be told to ignore all but a single locus, and this would be repeated 
-for each locus.
+genes needs to be automated, and ideally run in parallel. One way 
+to proceed is to have all the alignments in a single nexus file. 
+In the first step, MrBayes can be told to ignore all but a single 
+locus, and this would be repeated for each locus. 
+Alternatively, MrBayes can be told to analyse all loci at once 
+by unlinking \emph{topologies, branch lengths} and other parameters 
+assumed to be independent. The downside of this single analysis 
+is the difficulty to use multiple processors in parallel to speed
+up the analysis.
 
 \paragraph{Choosing the {\it a priori} level of discordance $\alpha$.}
 To select a value based on biological relevance, the number of taxa and 
@@ -537,7 +542,7 @@ The estimated population tree is inferred from quartet \cf{}s.
 For each set of 4 taxa, there are 3 possible quartets. The quartet with
 the greatest {\sc CF} is retained, and a tree is built from this set of 
 quartets using the quartet-joining algorithm \cite{xin_etal-2007}.
-If \cf{}s are estimated correctly, then this quartet-based method is 
+If \cf{}s are estimated without error, then this quartet-based method is 
 guaranteed to recover the true species tree if all discordance is due to
 the coalescent process along this tree. \cite{degnan_etal-2009}. 
 On each branch in this tree, the {\sc cf}s of all quartets in agreement 
