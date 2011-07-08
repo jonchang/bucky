@@ -322,6 +322,9 @@ int getComplement(vector<int>& t1, vector<int>& t2, int numTaxa)
 
         return i;
     }
+    cerr << "Warning: function 'getComplement' called on an inappropriate set of 2 clades.\n";
+    cout << "Warning: function 'getComplement' called on an inappropriate set of 2 clades.\n";
+    return numTaxa+1; // this case should never occur
 }
 
 string TreeBuilder::getTreeFromQuartetCounts(vector<vector<double> >& counts, int numTaxa, map<string, TieInfo*>& ties) {

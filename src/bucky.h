@@ -20,7 +20,7 @@
 #include "Quartets.h"
 using namespace std;
 
-static double LOG_ZERO = log(0);
+static double LOG_ZERO = log(double(0));
 
 class Gene {
 public:
@@ -130,7 +130,7 @@ public:
     numTreesSampled = numTrees;
     logNumTopologies = 0;
     for(int i=4;i<=numTaxa;i++)
-      logNumTopologies += log(2.0*i-5);
+      logNumTopologies += log(double(2.0*i-5));
     genes = g;
     alphaOverTop = exp(logAlpha - logNumTopologies);
     useIndependencePrior = useIP;
@@ -187,11 +187,9 @@ public:
     }
     double logHR=0;
     if(!useIndependencePrior) { // logHR=0 if independence prior
-      logHR += log(n2 + alphaOverTop);
-      logHR -= log(n1-1 + alphaOverTop);
+      logHR += log(double(n2 + alphaOverTop));
+      logHR -= log(double(n1-1 + alphaOverTop));
     }
-    //logHR += log(n2 + alphaOverTop); // fixit: bug here? replaced by the previous 4 lines.
-    //logHR -= log(n1-1 + alphaOverTop);
     logPriorProb += logHR;
     if(i < genes.size())
       logPosteriorProbProduct += (genes[i]->getLogProb(newTop) - genes[i]->getLogProb(oldTop));
