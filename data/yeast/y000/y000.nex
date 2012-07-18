@@ -21,7 +21,7 @@ begin mrbayes;
 	set autoclose=yes nowarn=yes;
 	lset rates = invgamma;
 	lset nst=6;
-[       set Seed=36277;
+[       set Seed=36277; ]
 [	mcmc ngen=550000 nruns=4 nchains=4 samplefreq=100 printfreq=1000 savebrlens=yes filename=y000mb321;]
 [	quit;]
 end;
