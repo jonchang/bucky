@@ -1639,21 +1639,30 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
 
   quartet::TreeBuilder tb;
   string quartetTree, quartetTreeWithWts;
-  tb.getTree(newTable, numTaxa, quartetTree, quartetTreeWithWts);
-  concordanceStr << "Population Tree:" << endl;
-  concordanceStr << quartetTree << endl << endl;
+  // next line added for Jenna, 7/20/2011. Change "true" to "false" to turn off 
+  // the calculation of the population tree, which is very memory-expensive.
+  // fixit: do this more elegantly using an option in a future version. 
+  bool buildPopulationTree = true;
+  if (buildPopulationTree){
+    tb.getTree(newTable, numTaxa, quartetTree, quartetTreeWithWts);
+    concordanceStr << "Population Tree:" << endl;
+    concordanceStr << quartetTree << endl << endl;
+  }
   ConcordanceTree z(tset,numGenes);
   concordanceStr << "Primary Concordance Tree Topology:" << endl;
   z.printTopology(concordanceStr);
 
-  concordanceStr<< "Population Tree, With Branch Lengths In Estimated Coalescent Units:" << endl;
-  concordanceStr << quartetTreeWithWts << endl << endl;
+  if(buildPopulationTree){
+    concordanceStr<< "Population Tree, With Branch Lengths In Estimated Coalescent Units:" << endl;
+    concordanceStr << quartetTreeWithWts << endl << endl;
+  }
   concordanceStr << "Primary Concordance Tree with Sample Concordance Factors:" << endl;
   z.print(concordanceStr, numGenes);
 
-  tb.printTies(concordanceStr);
-  concordanceStr << endl;
-
+  if(buildPopulationTree){
+    tb.printTies(concordanceStr);
+    concordanceStr << endl;
+  }
   concordanceStr << "Splits in the Primary Concordance Tree: sample-wide ";
   if (!mp.getUseIndependencePrior())
     concordanceStr << "and genome-wide ";

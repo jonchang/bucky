@@ -1,5 +1,5 @@
 // BUCKy - Bayesian Untangling of Concordance Knots (applied to yeast and other organisms)
-// Copyright (C) 2006 by Bret Larget
+// Copyright (C) 2006-2102 by Bret Larget
 
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License, version 2, as
@@ -16,6 +16,7 @@
 // version 1.3.0: Translate table, if present, are copied verbatim from
 //              the first file, assumed the same in other files.
 // version 1.4.0: requires translate tables, outputs unrooted formatted trees.
+// version 1.4.2: removes new extra characters between `=' and tree in MrBayes 3.2 output
 
 // mbsum.C
 
@@ -39,7 +40,7 @@
 //
 // Usage:    mbsum [--help || -h] [<--skip || -n> number-of-skipped-trees] [<--out || -o> output-file] [--version] [input filename(s)]
 
-#define VERSION "1.4.0"
+#define VERSION "1.4.2"
 
 #include <iostream>
 #include <iomanip>
@@ -234,6 +235,8 @@ int main(int argc, char *argv[])
     }
     // Now use foo as the EOL character
 
+    cerr << endl; // added for debugging!
+
     while(getline(f,line,foo)) {
       lineNumber++;
       istringstream s(line);
@@ -291,6 +294,17 @@ int main(int argc, char *argv[])
 	continue;
       }
 
+      // Skip extra output in MrBayes3.2 [&U] before tree string
+
+      while ( !s.fail() ) {
+	char c;
+	c = s.get();
+	if ( c == '(' ) {
+	  s.putback(c);
+	  break;
+	}
+      }
+      
       string treeString;
       s >> treeString;
       Tree tree(treeString,lineNumber, mbsumPruner);
