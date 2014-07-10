@@ -1,5 +1,5 @@
-// BUCKy 1.4- Bayesian Untangling of Concordance Knots (applied to yeast and other organisms)
-// Copyright (C) 2006-2007 by Bret Larget and Cecile Ane
+// BUCKy 1.4.3 Bayesian Untangling of Concordance Knots (applied to yeast and other organisms)
+// Copyright (C) 2006-2014 by Bret Larget and Cecile Ane and Riley Larget
 
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License, version 2, as
@@ -20,6 +20,7 @@
 // Version 1.2b 17 January, 2008
 // Version 1.3.0  27 May, 2009
 // Version 1.3.1  29 October, 2009
+// Version 1.4.3   9 July, 2014
 
 // File:     bucky.C
 
@@ -84,6 +85,11 @@
 // --- Fixed bug in the group update.
 // --- Translate tables are read and used to check all taxa are the same.
 
+// Changes in version 1.4.3
+// --- Updated included boost library to BOOST 1.55.0
+// --- Fixed incorrect return type in set.all()
+// --- Added virtual destructor for Table class
+
 #include <iostream>
 #include <iomanip>
 #include <string>
@@ -99,9 +105,9 @@
 #include "mbsumtree.h"
 
 using namespace std;
-string VERSION = "1.4.0";
-string DATE = "28 June 2010";
-string COPYRIGHT = "Copyright (C) 2006-2010 by Bret Larget and Cecile Ane";
+string VERSION = "1.4.3";
+string DATE = "9 Jul 2014";
+string COPYRIGHT = "Copyright (C) 2006-2014 by Bret Larget and Cecile Ane and Riley Larget";
 
 int countTaxa(string top) {
   int countTaxa=0;

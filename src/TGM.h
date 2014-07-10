@@ -42,25 +42,27 @@ private:
 
 class Table {
 public:
-    virtual void addGeneCount(string top, int gene, double count) = 0;
+  virtual ~Table() {}
+  
+  virtual void addGeneCount(string top, int gene, double count) = 0;
 
-    virtual void addGeneCount(int topIndex, int gene, double count) = 0;
-
-    virtual double getCounts(int top, int gene) = 0;
-
-    virtual double getCounts(string top, int gene) = 0;
-
-    virtual const vector<GeneCounts> getCounts(string top) = 0;
-
-    virtual double getTotalCounts(int top) = 0;
-
-    virtual void reorder() = 0;
-
-    virtual int getNumTrees() = 0;
-
-    virtual vector<string> getTopologies() = 0;
-
-    virtual void print(ostream &f) = 0;
+  virtual void addGeneCount(int topIndex, int gene, double count) = 0;
+  
+  virtual double getCounts(int top, int gene) = 0;
+  
+  virtual double getCounts(string top, int gene) = 0;
+  
+  virtual const vector<GeneCounts> getCounts(string top) = 0;
+  
+  virtual double getTotalCounts(int top) = 0;
+  
+  virtual void reorder() = 0;
+  
+  virtual int getNumTrees() = 0;
+  
+  virtual vector<string> getTopologies() = 0;
+  
+  virtual void print(ostream &f) = 0;
 };
 
 class TGMTable : public Table
@@ -212,6 +214,8 @@ class TGM : public Table
 {
 public:
     TGM() {}
+
+    ~TGM() {}
 
     TGM(vector<string>& topologies) {
         tops = topologies;

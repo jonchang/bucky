@@ -39,7 +39,7 @@ public:
     return taxa.count() == taxa.size();
   }
 
-  bool setAll() {
+  void setAll() {
     taxa.set();
   }
 
