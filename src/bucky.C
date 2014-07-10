@@ -89,6 +89,7 @@
 // --- Updated included boost library to BOOST 1.55.0
 // --- Fixed incorrect return type in set.all()
 // --- Added virtual destructor for Table class
+// --- Added option to turn off the population tree calculation
 
 #include <iostream>
 #include <iomanip>
@@ -910,6 +911,8 @@ void usage(Defaults defaults)
   cerr << "  use update groups              | --use-update-groups        | " << (defaults.getUseUpdateGroups() == true ? "true" : "false") << endl;
   cerr << "  use update groups              | --do-not-use-update-groups | " << endl;
   cerr << "  Space optimization             | --opt-space                | " << (defaults.shouldOptSpace() == true ? "true" : "false") << endl;
+  cerr << "  do not build population tree?  | --no-population-tree       | false"  << endl;
+  cerr << "  grid-size for genomewide CF    | --genomewide-grid-size     | " << defaults.getNumGenomewideGrid() << endl;
   cerr << "  help                           | -h OR --help               |" << endl;
   cerr << "  version                        | --version                  |" << endl;
   cerr << "  -------------------------------------------------------------------" << endl << endl;
@@ -941,6 +944,8 @@ void showParameters(ostream& f,FileNames& fn,Defaults defaults,ModelParameters& 
   f << "  File with prune list   | -p pruneFile             | " << left << setw(14) << ""                                                              << "| " << rp.getPruneFile() << endl;
   f << "  skip genes             | -sg                      | " << left << setw(14) <<"false" << "| " << (rp.getPruneGene() ? "true" : "false")<< endl;
   f << "  Space optimization     | --opt-space              | " << left << setw(14) << (defaults.shouldOptSpace() == true ? "true" : "false")          << "| " << (rp.shouldOptSpace() ? "true" : "false") << endl;
+  f << "  no population tree?    | --no-population-tree     | " << left << setw(14) <<"false" << "| " << (rp.shouldBuildPopulationTree() ? "false" : "true") << endl;
+  f << "  genomewide CF grid size| --genomewide-grid-size   | " << left << setw(14) << defaults.getNumGenomewideGrid()                                 << "| " << rp.getNumGenomewideGrid() << endl;
   f << "  ------------------------------------------------------------------------------" << endl;
 }
 
@@ -1138,15 +1143,14 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
       k++;
     }
     else if (flag =="--genomewide-grid-size") {
-      // grid-size is 1000 by default.
-      // fixit: Yujin observed obviously wrong genome-wide CF values when the number of genes exceeds the grid size.
-      // fixit: need to check that a higher grid-size fixed the bug, then add checks at the beginning to automatically
-      // increase the grid size to at least 10 * the number of genes. Or do whatever to fix the bug.
+      // 1000 by default. Yujin observed obviously wrong genome-wide CFs when # genes exceeds grid size.
+      // fixit: add checks at the beginning to automatically grid size to > 1 or 10 * #genes
+      //        document this option in manual: how and why.
       unsigned int ngrid;
       string num = argv[++k];
       istringstream f(num);
       if( !(f >> ngrid) )
-	usage(defaults); // fixit: add info on this option in the usage message
+	usage(defaults);
       if(ngrid==0)
 	cerr << "Warning: parameter grid-size must be at least one. Ignoring option genomewide-grid-size " << ngrid << "." << endl;
       else
@@ -1155,6 +1159,10 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
     }
     else if (flag =="--opt-space") {
       rp.setOptSpace(true);
+      k++;
+    }
+    else if (flag =="--no-population-tree") {
+      rp.setBuildPopulationTree(false);
       k++;
     }
     else
@@ -1645,11 +1653,7 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
 
   quartet::TreeBuilder tb;
   string quartetTree, quartetTreeWithWts;
-  // next line added for Jenna, 7/20/2011. Change "true" to "false" to turn off 
-  // the calculation of the population tree, which is very memory-expensive.
-  // fixit: do this more elegantly using an option in a future version. 
-  bool buildPopulationTree = true;
-  if (buildPopulationTree){
+  if (rp.shouldBuildPopulationTree()){
     tb.getTree(newTable, numTaxa, quartetTree, quartetTreeWithWts);
     concordanceStr << "Population Tree:" << endl;
     concordanceStr << quartetTree << endl << endl;
@@ -1658,14 +1662,14 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
   concordanceStr << "Primary Concordance Tree Topology:" << endl;
   z.printTopology(concordanceStr);
 
-  if(buildPopulationTree){
+  if(rp.shouldBuildPopulationTree()){
     concordanceStr<< "Population Tree, With Branch Lengths In Estimated Coalescent Units:" << endl;
     concordanceStr << quartetTreeWithWts << endl << endl;
   }
   concordanceStr << "Primary Concordance Tree with Sample Concordance Factors:" << endl;
   z.print(concordanceStr, numGenes);
 
-  if(buildPopulationTree){
+  if(rp.shouldBuildPopulationTree()){
     tb.printTies(concordanceStr);
     concordanceStr << endl;
   }

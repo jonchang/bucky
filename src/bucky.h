@@ -724,7 +724,8 @@ public:
     numGenomewideGrid(1000),
     swCFcutoff(.05),
     optSpace(false),
-    shouldPruneGene(false)
+    shouldPruneGene(false),
+    buildPopulationTree(true)
   {}
   double getAlphaMultiplier() { return alphaMultiplier; }
   void setAlphaMultiplier(double x) { alphaMultiplier = x; }
@@ -762,6 +763,8 @@ public:
   void setPruneGene(bool pg) { shouldPruneGene = pg; }
   bool shouldOptSpace() { return optSpace;}
   void setOptSpace(bool o) { optSpace = o; }
+  bool shouldBuildPopulationTree() { return buildPopulationTree;}
+  void setBuildPopulationTree(bool x) { buildPopulationTree = x; }
 private:
   double alphaMultiplier,swCFcutoff;  // cutoff on sample-wide CF to display splits
   unsigned int seed1,seed2,numUpdates,subsampleRate,numRuns,numChains,mcmcmcRate,numGenomewideGrid;
@@ -774,6 +777,7 @@ private:
   bool shouldPruneGene;
   bool optSpace; // set this if gene topology counts forms a sparse matrix. We do not store zeros in the 'table' in this case.
                  // default is false because this is not time-efficient.
+  bool buildPopulationTree;
 };
 
 class Defaults {
