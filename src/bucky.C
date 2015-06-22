@@ -1,4 +1,4 @@
-// BUCKy 1.4.3 Bayesian Untangling of Concordance Knots (applied to yeast and other organisms)
+// BUCKy 1.4.4 Bayesian Untangling of Concordance Knots (applied to yeast and other organisms)
 // Copyright (C) 2006-2014 by Bret Larget and Cecile Ane and Riley Larget
 
 // This program is free software; you can redistribute it and/or modify
@@ -21,6 +21,7 @@
 // Version 1.3.0  27 May, 2009
 // Version 1.3.1  29 October, 2009
 // Version 1.4.3   9 July, 2014
+// Version 1.4.4  22 June, 2015
 
 // File:     bucky.C
 
@@ -91,6 +92,10 @@
 // --- Added virtual destructor for Table class
 // --- Added option to turn off the population tree calculation
 
+// Changes in version 1.4.3
+// --- Fixed error with genome-wide CFs, that occurred when grid<ngenes and for low-CF splits.
+//
+
 #include <iostream>
 #include <iomanip>
 #include <string>
@@ -106,9 +111,9 @@
 #include "mbsumtree.h"
 
 using namespace std;
-string VERSION = "1.4.3";
-string DATE = "9 Jul 2014";
-string COPYRIGHT = "Copyright (C) 2006-2014 by Bret Larget and Cecile Ane and Riley Larget";
+string VERSION = "1.4.4";
+string DATE = "22 June 2015";
+string COPYRIGHT = "Copyright (C) 2006-2015 by Bret Larget, Cecile Ane and Riley Larget";
 
 int countTaxa(string top) {
   int countTaxa=0;
@@ -1143,9 +1148,6 @@ int readArguments(int argc, char *argv[],FileNames& fn,ModelParameters& mp,RunPa
       k++;
     }
     else if (flag =="--genomewide-grid-size") {
-      // 1000 by default. Yujin observed obviously wrong genome-wide CFs when # genes exceeds grid size.
-      // fixit: add checks at the beginning to automatically grid size to > 1 or 10 * #genes
-      //        document this option in manual: how and why.
       unsigned int ngrid;
       string num = argv[++k];
       istringstream f(num);
@@ -1351,7 +1353,7 @@ void GenomewideDistribution::updateConvolutionWeight(double alpha){
   // logZ ~ log of sum(exp(logweight[,j]))/ngrid, for any j, avoiding the need for
   // a library for the Beta or the Gamma function. Checked with R: very accurate
   // approximation as soon as ngrid > 100 and j well chosen (so that weight[,j] not too skewed).
-  int bestj = (int) (ngenes/2+alpha*(0.5-priorProbability));
+  int bestj = (int) ( ((double)ngenes)/2 + alpha*(0.5-priorProbability));
   if (bestj>ngenes-1) bestj=ngenes-1;
   else if (bestj<1) bestj=1;
   double logZ = 0;
@@ -1387,16 +1389,19 @@ void GenomewideDistribution::updateGenomewide(double alpha) {
     if (i>0) csum[i] += csum[i-1]+genomewide[i];
     else csum[i] = genomewide[i];
   }
+
   int i=0;
-  while(csum[i] < 0.005) i++;
+  while(csum[i] < 0.005 && i<ngrid) i++;
+  /* the condition i<ngrid is not needed in theory, but in practice it is because
+     cumsum[ngrid] may be < 1.0, due to the approximation in Z (see above) */
   genomewideCredibilityInterval[0]= ((double) i)/ngrid;
-  while(csum[i] < 0.025) i++;
+  while(csum[i] < 0.025 && i<ngrid) i++;
   genomewideCredibilityInterval[1]= ((double) i)/ngrid;
-  while(csum[i] < 0.05) i++;
+  while(csum[i] < 0.05 && i<ngrid) i++;
   genomewideCredibilityInterval[2]= ((double) i)/ngrid;
-  while(csum[i] < 0.95) i++;
+  while(csum[i] < 0.95 && i<ngrid) i++;
   genomewideCredibilityInterval[3]= ((double) i)/ngrid;
-  while(csum[i] < 0.975) i++;
+  while(csum[i] < 0.975 && i<ngrid) i++;
   genomewideCredibilityInterval[4]= ((double) i)/ngrid;
   while(csum[i] < 0.995 && i<ngrid) i++;
   genomewideCredibilityInterval[5]= ((double) i)/ngrid;
@@ -1550,12 +1555,6 @@ void writeOutput(ostream& fout,FileNames& fileNames,int max,int numTrees,int num
     sw[i].setIndex(i);
   }
   sort(sw.begin(),sw.end(),cmpTreeWeights);
-
-  unsigned int all=0; //fixit: What is this for??
-  for(int i=0;i<numTaxa;i++) {
-    all <<= 1;
-    all += 1;
-  }
 
   // ctree is the vector of splits in the primary concordance tree
   // gwDistr is the vector of GenomewideDistribution for splits in the primary concordance tree
@@ -1891,8 +1890,7 @@ int main(int argc, char *argv[])
     readInputFileList(fileNames.getInputListFileName(), inputFiles);
   }
 
-  int numGenes = inputFiles.size();
-
+  int numGenes;
   int max=0;
   int numTaxa;
   vector<string> translateTable;
@@ -1924,6 +1922,15 @@ int main(int argc, char *argv[])
   numGenes = inputFiles.size();
   numTaxa = translateTable.size();
   cout << "....done." << endl;
+
+  // check that genome-wide grid size > number of genes: otherwise the genome-wide estimates are innacurate.
+  if (rp.getNumGenomewideGrid() < 3*numGenes){
+    cout << "The grid size to get genome-wide CFs is too small compared to the number of sampled genes...";
+    fout << "The grid size to get genome-wide CFs is too small compared to the number of sampled genes...";
+    cout << " changing this grid size to "<< 3*numGenes << " (3 * # genes)"<<endl;
+    fout << " changing this grid size to "<< 3*numGenes << " (3 * # genes)"<<endl;
+    rp.setNumGenomewideGrid(3*numGenes);
+  }
 
   // Check for missing taxa.
   for(int i=0; i<inputFiles.size(); i++) {
